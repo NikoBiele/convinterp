@@ -1,0 +1,13 @@
+# The Rust package. Cargo is Rust's build tool and package manager, like Julia's Pkg.
+[package]
+name = "convinterp"
+version = "0.1.0"
+edition = "2021"                  # the Rust language edition (a stable set of language rules)
+
+[lib]
+name = "_core"                    # the compiled module; Python imports it as convinterp._core
+crate-type = ["cdylib"]           # build a shared library that Python can load
+
+[dependencies]
+pyo3 = "0.29"                     # Rust ↔ Python bindings
+numpy = "0.29"                    # NumPy arrays in Rust (must match the PyO3 version)

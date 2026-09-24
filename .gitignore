@@ -1,0 +1,10 @@
+# Rust build output
+target/
+# Python virtual environment and caches
+.venv/
+__pycache__/
+.pytest_cache/
+# compiled extension module and its debug symbols (rebuilt by maturin develop)
+*.pyd
+*.pdb
+*.so

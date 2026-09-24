@@ -1,0 +1,19 @@
+# The Python package, built by maturin from the Rust code.
+[build-system]
+requires = ["maturin>=1.15,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "convinterp"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+# juliacall is only needed to test against the Julia package, never by users
+test = ["pytest", "juliacall"]
+
+[tool.maturin]
+python-source = "python"                  # the Python code lives in python/
+module-name = "convinterp._core"          # where the compiled Rust module goes
+features = ["pyo3/extension-module"]      # build as a Python extension module
