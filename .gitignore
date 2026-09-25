@@ -9,3 +9,6 @@ __pycache__/
 *.pdb
 *.so
 check_python.py
+# documentation build output (published by CI, never committed)
+docs/_site/
+docs/.quarto/

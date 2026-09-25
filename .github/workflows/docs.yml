@@ -1,0 +1,51 @@
+# Builds the documentation website from docs/ and publishes it to https://convinterp.org.
+# The code cells run against convinterp compiled from this repository, so the pages always
+# describe the code as it is on main.
+name: Docs
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:                 # a "Run workflow" button in the Actions tab
+
+permissions:
+  contents: read
+  pages: write                       # to publish to GitHub Pages
+  id-token: write                    # to authenticate the publishing
+
+concurrency:
+  group: pages                       # one publication at a time; a newer push waits for the current one
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install convinterp from this repository, and the packages the pages use
+        run: |
+          python -m pip install --upgrade pip
+          pip install . jupyter matplotlib scipy
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+      - name: Render the website
+        run: quarto render docs
+      - name: Upload the website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
