@@ -3,6 +3,9 @@
 name = "convinterp"
 version = "0.1.0"
 edition = "2021"                  # the Rust language edition (a stable set of language rules)
+description = "Rust core of convinterp: high-order convolution interpolation on uniform grids"
+license = "MIT"
+repository = "https://github.com/NikoBiele/convinterp"
 
 [lib]
 name = "_core"                    # the compiled module; Python imports it as convinterp._core
@@ -12,3 +15,8 @@ crate-type = ["cdylib"]           # build a shared library that Python can load
 pyo3 = "0.29"                     # Rust ↔ Python bindings
 numpy = "0.29"                    # NumPy arrays in Rust (must match the PyO3 version)
 wide = "1.7"                      # explicit SIMD: f64x4 is four doubles in one vector register
+
+# Release builds (maturin develop --release, and the published wheels)
+[profile.release]
+lto = true                        # link-time optimization: optimize across crates (pyo3, wide, ndarray)
+codegen-units = 1                 # compile as one unit, so the optimizer sees the whole crate at once
