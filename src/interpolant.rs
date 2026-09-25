@@ -219,7 +219,7 @@ impl Interpolant1D {
 }
 
 /// The rows of a column table as 4-wide vectors, padded with zero columns to a multiple of four
-fn pad_rows(table: &ColumnTable) -> Vec<f64x4> {
+pub(crate) fn pad_rows(table: &ColumnTable) -> Vec<f64x4> {
     let k = table.columns;
     let blocks = (k + 3) / 4;
     let mut padded = Vec::with_capacity(table.rows.len() / k * blocks);
@@ -237,7 +237,7 @@ fn pad_rows(table: &ColumnTable) -> Vec<f64x4> {
 /// The weights at tau as B vectors of four: Horner's scheme over the rows, where every step is
 /// one explicit 4-wide fused multiply-add per vector, whatever the kernel size
 #[inline]
-fn horner_weights<const B: usize>(rows: &[[f64x4; B]], tau: f64) -> [f64x4; B] {
+pub(crate) fn horner_weights<const B: usize>(rows: &[[f64x4; B]], tau: f64) -> [f64x4; B] {
     let tau = f64x4::splat(tau);
     let mut w = [f64x4::splat(0.0); B];
     for row in rows {

@@ -40,7 +40,9 @@ def julia_coefficients():
 
 
 def test_matches_julia(julia_coefficients):
-    # Smooth data (where :detect accepts :poly) and rough data (where it falls back to :linear)
+    # Smooth data (where :detect accepts :poly) and rough data (where it falls back to :linear).
+    # Both sides compute every ghost value with the same compensated sum, in the same order,
+    # so they agree bit for bit.
     x = np.linspace(0.0, 3.0, 40)
     datasets = [np.sin(x) + 0.3 * x, np.where(x < 0.1, 5.0, 0.0) + np.cos(7.0 * x)]
     for values in datasets:
@@ -48,10 +50,7 @@ def test_matches_julia(julia_coefficients):
             for left in BOUNDARIES:
                 for right in BOUNDARIES:
                     expected = np.asarray(julia_coefficients(values, kernel, left, right))
-                    np.testing.assert_allclose(
+                    np.testing.assert_array_equal(
                         extended_coefficients(values, kernel, left, right), expected,
-                        # ghost values of the wide kernels come from heavy cancellation (:b13's
-                        # matrix has entries up to ~3e5), so summation order shows up near 1e-11
-                        rtol=0, atol=1e-10,
                         err_msg=f"kernel {kernel}, boundaries {left}/{right}",
                     )

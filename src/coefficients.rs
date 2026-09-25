@@ -1,5 +1,7 @@
 //! Coefficients of an interpolant: the data values, extended by ghost values beyond each
-//! boundary, as ConvolutionInterpolations.jl does it (create_convolutional_coefs, in 1D).
+//! boundary, as ConvolutionInterpolations.jl does it (create_convolutional_coefs), in 1D and N-D.
+
+use numpy::ndarray::{ArrayD, ArrayViewD, ArrayViewMut1, Axis, IxDyn, Slice};
 
 use crate::kernels::{self, GhostMatrix};
 
@@ -63,30 +65,92 @@ pub fn extended_coefficients(
 
     let poly = kernels::poly_ghost_matrix(kernel)
         .ok_or_else(|| format!("no polynomial ghost matrix for kernel {kernel:?}"))?;
+    // the vector seen as a 1D array view, so the same line routine serves 1D and N-D
+    let mut line = ArrayViewMut1::from(&mut c[..]);
+    fill_ghosts(&mut line, n, n_ghost, poly, left, right);
+    Ok(c)
+}
+
+/// The N-D data array extended by eqs − 1 ghost values beyond each boundary of every axis, with
+/// boundary conditions `bcs[axis] = (left, right)`. As in Julia, the axes are extended one after
+/// the other, each along every line of the array built so far: extending axis 1 also runs along
+/// the ghost layers of axis 0, which fills the corners.
+pub fn extended_coefficients_nd(
+    values: ArrayViewD<'_, f64>,
+    kernel: &str,
+    bcs: &[(Boundary, Boundary)],
+) -> Result<ArrayD<f64>, String> {
+    let eqs = stencil_half_width(kernel)?;
+    let n_ghost = eqs - 1;
+    let data_shape: Vec<usize> = values.shape().to_vec();
+    if bcs.len() != data_shape.len() {
+        return Err(format!(
+            "{} boundary condition pairs given for {}-dimensional data",
+            bcs.len(),
+            data_shape.len()
+        ));
+    }
+
+    // an array of zeros with n_ghost extra positions at both ends of every axis
+    let shape: Vec<usize> = data_shape.iter().map(|&n| n + 2 * n_ghost).collect();
+    let mut c = ArrayD::<f64>::zeros(IxDyn(&shape));
+    // the data go in the middle: along every axis, positions n_ghost … n_ghost + n − 1
+    c.slice_each_axis_mut(|ax| Slice::from(n_ghost..n_ghost + data_shape[ax.axis.index()]))
+        .assign(&values);
+    if n_ghost == 0 {
+        return Ok(c); // :a0 and :a1 need no ghost values
+    }
+
+    let poly = kernels::poly_ghost_matrix(kernel)
+        .ok_or_else(|| format!("no polynomial ghost matrix for kernel {kernel:?}"))?;
+    for (axis, &(left, right)) in bcs.iter().enumerate() {
+        let n = data_shape[axis];
+        // `lanes_mut` visits every line of the array along `axis`, as a mutable 1D view
+        for mut line in c.lanes_mut(Axis(axis)) {
+            fill_ghosts(&mut line, n, n_ghost, poly, left, right);
+        }
+    }
+    Ok(c)
+}
+
+/// Fill the ghost values at both ends of one line: `line` holds n_ghost ghost positions, the n
+/// data values, and n_ghost ghost positions (Julia: apply_boundary_conditions_for_dim!, for one
+/// line). Only the ghost positions are written. The :detect test reads the mean-centered values;
+/// the ghost values are computed from the values themselves (see `ghost_value`).
+fn fill_ghosts(
+    line: &mut ArrayViewMut1<'_, f64>,
+    n: usize,
+    n_ghost: usize,
+    poly: &'static GhostMatrix,
+    left: Boundary,
+    right: Boundary,
+) {
     let ns = poly.cols; // data values the polynomial extrapolation uses
     let few_points = n < ns;
+    let eqs = n_ghost + 1;
     // number of values next to each boundary that are read: the detect test needs ns + 3
     let m = n.min((ns + 3).max(eqs));
 
     // ---- left boundary: the first m values, nearest to the boundary first ----
-    let mut slice: Vec<f64> = values[..m].to_vec();
-    let mean = center(&mut slice);
-    let g = choose_matrix(poly, left, few_points, &slice, 0, 1);
+    let raw: Vec<f64> = (0..m).map(|d| line[n_ghost + d]).collect();
+    // a mean-centered copy, for the :detect test only
+    let mut centered = raw.clone();
+    center(&mut centered);
+    let g = choose_matrix(poly, left, few_points, &centered, 0, 1);
     for j in 1..=n_ghost {
         // ghost j lies j positions left of the first data value
-        c[n_ghost - j] = mean + ghost_value(g, j, |d| slice[d]);
+        line[n_ghost - j] = ghost_value(g, j, |d| raw[d]);
     }
 
     // ---- right boundary: the last m values, in increasing order ----
-    let mut slice: Vec<f64> = values[n - m..].to_vec();
-    let mean = center(&mut slice);
-    let g = choose_matrix(poly, right, few_points, &slice, m - 1, -1);
+    let raw: Vec<f64> = (0..m).map(|d| line[n_ghost + n - m + d]).collect();
+    let mut centered = raw.clone();
+    center(&mut centered);
+    let g = choose_matrix(poly, right, few_points, &centered, m - 1, -1);
     for j in 1..=n_ghost {
         // ghost j lies j positions right of the last data value; nearest data value first
-        c[n_ghost + n - 1 + j] = mean + ghost_value(g, j, |d| slice[m - 1 - d]);
+        line[n_ghost + n - 1 + j] = ghost_value(g, j, |d| raw[m - 1 - d]);
     }
-
-    Ok(c)
 }
 
 /// Subtract the mean from every value (in place), returning the mean
@@ -98,17 +162,39 @@ fn center(slice: &mut [f64]) -> f64 {
     mean
 }
 
-/// Ghost value j (1-based) from the centered data: row j of the matrix times the values y(0),
-/// y(1), …, nearest to the boundary first. `y` is a closure: a small function passed as an argument.
+/// Ghost value j (1-based): row j of the matrix times the values y(0), y(1), …, nearest to the
+/// boundary first. `y` is a closure: a small function passed as an argument.
+/// The sum is the compensated dot product Dot2 (Ogita, Rump & Oishi 2005): as accurate as if
+/// computed in twice the precision and then rounded. The terms are added in the same fixed order
+/// as the Julia package (_compensated_row_dot), so both give the same bits.
 fn ghost_value(g: &GhostMatrix, j: usize, y: impl Fn(usize) -> f64) -> f64 {
     // the matrix must provide a row for ghost value j (checked in development builds)
     debug_assert!(j <= g.rows, "ghost matrix has {} rows, ghost value {} requested", g.rows, j);
     let row = &g.values[(j - 1) * g.cols..j * g.cols];
-    let mut sum = 0.0_f64;
+    let mut s = 0.0_f64; // running sum of the products
+    let mut e = 0.0_f64; // running sum of the rounding errors of the products and additions
     for (d, &weight) in row.iter().enumerate() {
-        sum += weight * y(d);
+        let (p, ep) = two_prod(weight, y(d)); // product, and its exact rounding error
+        let (s_new, es) = two_sum(s, p); // new sum, and its exact rounding error
+        s = s_new;
+        e += ep + es;
     }
-    sum
+    s + e
+}
+
+/// Error-free transformation of a product: a·b = p + e exactly, using one fused multiply-add
+#[inline]
+fn two_prod(a: f64, b: f64) -> (f64, f64) {
+    let p = a * b;
+    (p, a.mul_add(b, -p))
+}
+
+/// Error-free transformation of a sum: a + b = s + e exactly
+#[inline]
+fn two_sum(a: f64, b: f64) -> (f64, f64) {
+    let s = a + b;
+    let z = s - a;
+    (s, (a - (s - z)) + (b - z))
 }
 
 /// The ghost matrix for one boundary: the kernel's polynomial matrix if the boundary condition

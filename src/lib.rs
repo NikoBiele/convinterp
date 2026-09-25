@@ -4,9 +4,10 @@
 // (src/coefficients.rs) become modules of this crate
 mod coefficients;
 mod interpolant;
+mod interpolant_nd;
 mod kernels;
 
-use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1};
+use numpy::{IntoPyArray, PyArray1, PyArrayDyn, PyReadonlyArray1, PyReadonlyArrayDyn};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -57,8 +58,6 @@ fn kernel_weights(kernel: &str, order: i32, tau: f64) -> PyResult<Vec<f64>> {
     Ok(column_weights(table, tau))
 }
 
-// NEW ------------------------------------------------------------------------------------------
-
 /// Python-visible (for testing): the data values extended by ghost values beyond each boundary,
 /// for `kernel` and the boundary conditions `bc_left` and `bc_right` ("poly", "linear",
 /// "quadratic" or "detect").
@@ -78,7 +77,27 @@ fn extended_coefficients<'py>(
     Ok(c.into_pyarray(py))
 }
 
-// ----------------------------------------------------------------------------------------------
+/// Python-visible (for testing): the N-D data array extended by ghost values beyond each
+/// boundary of every axis, for `kernel` and one (left, right) pair of boundary condition names
+/// per axis, e.g. [("poly", "poly"), ("detect", "linear")] for 2D data.
+#[pyfunction]
+fn extended_coefficients_nd<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArrayDyn<'py, f64>,
+    kernel: &str,
+    bcs: Vec<(String, String)>,
+) -> PyResult<Bound<'py, PyArrayDyn<f64>>> {
+    // Parse every pair; `collect` into a Result stops at the first unknown name
+    let bcs = bcs
+        .iter()
+        .map(|(l, r)| Ok((coefficients::Boundary::parse(l)?, coefficients::Boundary::parse(r)?)))
+        .collect::<Result<Vec<_>, String>>()
+        .map_err(|e| PyValueError::new_err(e))?;
+    // `as_array` gives a view of the NumPy array (any number of dimensions), without copying
+    let c = coefficients::extended_coefficients_nd(values.as_array(), kernel, &bcs)
+        .map_err(|e| PyValueError::new_err(e))?;
+    Ok(c.into_pyarray(py))
+}
 
 /// The module definition: what Python sees when it imports convinterp._core.
 #[pymodule]
@@ -86,6 +105,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_polynomial, m)?)?;
     m.add_function(wrap_pyfunction!(kernel_weights, m)?)?;
     m.add_function(wrap_pyfunction!(extended_coefficients, m)?)?;
+    m.add_function(wrap_pyfunction!(extended_coefficients_nd, m)?)?;
     m.add_class::<interpolant::Interpolant1D>()?;
+    m.add_class::<interpolant_nd::InterpolantND>()?;
     Ok(())
 }
