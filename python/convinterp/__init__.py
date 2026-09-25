@@ -26,8 +26,8 @@ class Interpolation:
         return float(values[0]) if points.ndim == 0 else values.reshape(points.shape)
 
 
-def convolution_interpolation(x, values, kernel="b7", bc="detect"):
-    """Interpolate data on a uniform 1D grid.
+def convolution_interpolation(x, values, kernel="b7", bc="detect", derivative=0):
+    """Interpolate data on a uniform 1D grid, or differentiate the interpolant.
 
     Parameters
     ----------
@@ -42,6 +42,10 @@ def convolution_interpolation(x, values, kernel="b7", bc="detect"):
         Boundary condition at both ends, or separately (left, right): "poly" (polynomial
         extrapolation), "linear", "quadratic", or "detect" (polynomial where the data allow it,
         otherwise linear).
+    derivative : int, default 0
+        Derivative order: 0 for the interpolant itself, 1 for its first derivative, and so on.
+        Available up to order 1 for "a3" to "a7", 3 for "b5", 5 for "b7", 6 for "b9" and 7 for
+        "b11" and "b13".
 
     Returns
     -------
@@ -52,14 +56,17 @@ def convolution_interpolation(x, values, kernel="b7", bc="detect"):
     -------
     >>> import numpy as np
     >>> from convinterp import convolution_interpolation
-    >>> x = np.linspace(0.0, 2 * np.pi, 50)             # uniform grid
-    >>> itp = convolution_interpolation(x, np.sin(x))   # interpolant of the data
-    >>> round(itp(1.0), 6)                              # evaluate at one point
+    >>> x = np.linspace(0.0, 2 * np.pi, 50)                            # uniform grid
+    >>> itp = convolution_interpolation(x, np.sin(x))                  # interpolant of the data
+    >>> round(itp(1.0), 6)                                             # sin(1)
     0.841471
+    >>> d_itp = convolution_interpolation(x, np.sin(x), derivative=1)  # its first derivative
+    >>> round(d_itp(1.0), 6)                                           # cos(1)
+    0.540302
     """
     # one boundary condition for both ends, or a (left, right) pair
     bc_left, bc_right = (bc, bc) if isinstance(bc, str) else bc
     # contiguous float64 arrays, as the Rust core expects
     x = np.ascontiguousarray(x, dtype=np.float64)
     values = np.ascontiguousarray(values, dtype=np.float64)
-    return Interpolation(Interpolant1D(x, values, kernel, bc_left, bc_right))
+    return Interpolation(Interpolant1D(x, values, kernel, bc_left, bc_right, derivative))

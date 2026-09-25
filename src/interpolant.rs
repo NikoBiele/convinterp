@@ -1,5 +1,5 @@
 //! A 1D convolution interpolant on a uniform grid, as in ConvolutionInterpolations.jl
-//! (the eager 1D evaluator).
+//! (the eager 1D evaluator), for values and derivatives.
 
 use numpy::ndarray::ArrayView1;
 use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1};
@@ -27,15 +27,17 @@ pub struct Interpolant1D {
     nearest: bool,
     /// Number of stencil columns K of the kernel (2·eqs)
     columns: usize,
-    /// The kernel's column table as 4-wide vectors, padded with zero columns to a multiple of four:
-    /// each row is B = ⌈K/4⌉ consecutive vectors, highest power of tau first
+    /// The column table of the kernel's derivative of the requested order, as 4-wide vectors
+    /// padded with zero columns to a multiple of four: each row is B = ⌈K/4⌉ consecutive vectors
     padded_rows: Vec<f64x4>,
+    /// Factor applied to every result: (−1/h)^derivative (exactly 1 for values)
+    scale: f64,
 }
 
 #[pymethods]
 impl Interpolant1D {
-    /// Construct from uniform knots `x`, data `values`, a kernel name and the two boundary
-    /// conditions. `#[new]` makes this the Python constructor, Interpolant1D(...).
+    /// Construct from uniform knots `x`, data `values`, a kernel name, the two boundary conditions
+    /// and the derivative order (0 for values). `#[new]` makes this the Python constructor.
     #[new]
     fn new(
         x: PyReadonlyArray1<'_, f64>,
@@ -43,6 +45,7 @@ impl Interpolant1D {
         kernel: &str,
         bc_left: &str,
         bc_right: &str,
+        derivative: i32,
     ) -> PyResult<Self> {
         let x = x.as_slice()?;
         let values = values.as_slice()?;
@@ -66,12 +69,27 @@ impl Interpolant1D {
             }
         }
 
-        // The kernel: nearest neighbour, or a column table converted to padded 4-wide vectors
+        // The derivative order must be one the kernel provides
+        let max_order = kernels::max_derivative(kernel)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown kernel {kernel:?}")))?;
+        if derivative < 0 {
+            return Err(PyValueError::new_err(
+                "antiderivatives (negative derivative orders) are not supported yet",
+            ));
+        }
+        if derivative > max_order {
+            return Err(PyValueError::new_err(format!(
+                "kernel {kernel:?} supports derivatives up to order {max_order}, got {derivative}"
+            )));
+        }
+
+        // The kernel: nearest neighbour, or the column table of the requested derivative,
+        // converted to padded 4-wide vectors
         let (nearest, columns, padded_rows) = if kernel == "a0" {
             (true, 2, Vec::new())
         } else {
-            let table = kernels::column_table(kernel, 0).ok_or_else(|| {
-                PyValueError::new_err(format!("unknown kernel {kernel:?}"))
+            let table = kernels::column_table(kernel, derivative).ok_or_else(|| {
+                PyValueError::new_err(format!("no table for kernel {kernel:?}, order {derivative}"))
             })?;
             (false, table.columns, pad_rows(table))
         };
@@ -93,6 +111,8 @@ impl Interpolant1D {
             nearest,
             columns,
             padded_rows,
+            // d/dx = (1/h)·d/du, and the columns are functions of tau = 1 − t: hence (−1/h)^d
+            scale: (-1.0 / h).powi(derivative),
         })
     }
 
@@ -155,7 +175,8 @@ impl Interpolant1D {
             for k in 0..K {
                 sum = c[k].mul_add(weights[k], sum);
             }
-            out.push(sum);
+            // (−1/h)^d for derivatives; exactly 1 for values
+            out.push(sum * self.scale);
         }
         Ok(out)
     }
