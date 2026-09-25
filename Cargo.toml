@@ -11,3 +11,4 @@ crate-type = ["cdylib"]           # build a shared library that Python can load
 [dependencies]
 pyo3 = "0.29"                     # Rust ↔ Python bindings
 numpy = "0.29"                    # NumPy arrays in Rust (must match the PyO3 version)
+wide = "1.7"                      # explicit SIMD: f64x4 is four doubles in one vector register

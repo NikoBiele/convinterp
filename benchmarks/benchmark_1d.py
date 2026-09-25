@@ -53,7 +53,7 @@ y = np.sin(x)
 points = np.random.default_rng(1).uniform(x[0], x[-1], 1_000_000)
 
 print(f"{'kernel':<8}{'Rust [ns]':>12}{'Julia [ns]':>12}{'ratio':>9}")
-for kernel in ["a1", "a3", "b5", "b7", "b13"]:
+for kernel in ["a1", "a3", "a4", "a5", "a7", "b5", "b7", "b9", "b11", "b13"]:
     rust = rust_ns_per_point(x, y, kernel, points)
     julia = julia_ns_per_point(x, y, kernel, points)
     print(f"{kernel:<8}{rust:>12.1f}{julia:>12.1f}{rust / julia:>9.2f}")

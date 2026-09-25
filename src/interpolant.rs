@@ -5,18 +5,10 @@ use numpy::ndarray::ArrayView1;
 use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use wide::f64x4;
 
 use crate::coefficients::{self, Boundary};
 use crate::kernels::{self, ColumnTable};
-
-/// How the weights of a kernel are computed
-#[derive(Clone, Copy)]
-enum Weights {
-    /// Nearest neighbour (:a0): all weight on the nearer of the two coefficients
-    NearestNeighbour,
-    /// Every other kernel: the exact column polynomials
-    Table(&'static ColumnTable),
-}
 
 /// A 1D interpolant. `#[pyclass]` makes it a Python class; its fields stay private to Rust.
 #[pyclass]
@@ -31,8 +23,13 @@ pub struct Interpolant1D {
     /// The data range; points outside it are rejected
     x_first: f64,
     x_last: f64,
-    /// How the kernel weights are computed
-    weights: Weights,
+    /// Nearest neighbour (:a0), which needs no weights
+    nearest: bool,
+    /// Number of stencil columns K of the kernel (2·eqs)
+    columns: usize,
+    /// The kernel's column table as 4-wide vectors, padded with zero columns to a multiple of four:
+    /// each row is B = ⌈K/4⌉ consecutive vectors, highest power of tau first
+    padded_rows: Vec<f64x4>,
 }
 
 #[pymethods]
@@ -69,14 +66,17 @@ impl Interpolant1D {
             }
         }
 
-        // The weights and the extended coefficients
-        let weights = if kernel == "a0" {
-            Weights::NearestNeighbour
+        // The kernel: nearest neighbour, or a column table converted to padded 4-wide vectors
+        let (nearest, columns, padded_rows) = if kernel == "a0" {
+            (true, 2, Vec::new())
         } else {
-            Weights::Table(kernels::column_table(kernel, 0).ok_or_else(|| {
+            let table = kernels::column_table(kernel, 0).ok_or_else(|| {
                 PyValueError::new_err(format!("unknown kernel {kernel:?}"))
-            })?)
+            })?;
+            (false, table.columns, pad_rows(table))
         };
+
+        // The extended coefficients
         let left = Boundary::parse(bc_left).map_err(|e| PyValueError::new_err(e))?;
         let right = Boundary::parse(bc_right).map_err(|e| PyValueError::new_err(e))?;
         let coefs = coefficients::extended_coefficients(values, kernel, left, right)
@@ -90,7 +90,9 @@ impl Interpolant1D {
             eqs,
             x_first: x[0],
             x_last: x[n - 1],
-            weights,
+            nearest,
+            columns,
+            padded_rows,
         })
     }
 
@@ -101,26 +103,28 @@ impl Interpolant1D {
         points: PyReadonlyArray1<'py, f64>,
     ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let points = points.as_array();
-        // Choose the specialized evaluator once per call: one compiled copy per column count K
-        let values = match self.weights {
-            Weights::NearestNeighbour => self.evaluate_nearest(points)?,
-            Weights::Table(table) => match table.columns {
-                2 => self.evaluate_columns::<2>(table, points)?,
-                4 => self.evaluate_columns::<4>(table, points)?,
-                6 => self.evaluate_columns::<6>(table, points)?,
-                8 => self.evaluate_columns::<8>(table, points)?,
-                10 => self.evaluate_columns::<10>(table, points)?,
-                12 => self.evaluate_columns::<12>(table, points)?,
-                14 => self.evaluate_columns::<14>(table, points)?,
-                16 => self.evaluate_columns::<16>(table, points)?,
-                18 => self.evaluate_columns::<18>(table, points)?,
-                20 => self.evaluate_columns::<20>(table, points)?,
+        // Choose the specialized evaluator once per call: one compiled copy per column count K,
+        // with B = ⌈K/4⌉ vectors per table row
+        let values = if self.nearest {
+            self.evaluate_nearest(points)?
+        } else {
+            match self.columns {
+                2 => self.evaluate_columns::<2, 1>(points)?,
+                4 => self.evaluate_columns::<4, 1>(points)?,
+                6 => self.evaluate_columns::<6, 2>(points)?,
+                8 => self.evaluate_columns::<8, 2>(points)?,
+                10 => self.evaluate_columns::<10, 3>(points)?,
+                12 => self.evaluate_columns::<12, 3>(points)?,
+                14 => self.evaluate_columns::<14, 4>(points)?,
+                16 => self.evaluate_columns::<16, 4>(points)?,
+                18 => self.evaluate_columns::<18, 5>(points)?,
+                20 => self.evaluate_columns::<20, 5>(points)?,
                 k => {
                     return Err(PyValueError::new_err(format!(
                         "no evaluator for a kernel with {k} columns"
                     )))
                 }
-            },
+            }
         };
         Ok(values.into_pyarray(py))
     }
@@ -128,27 +132,28 @@ impl Interpolant1D {
 
 // Methods only Rust can call: a separate `impl` block without #[pymethods]
 impl Interpolant1D {
-    /// Evaluate a kernel with K stencil columns at every point. `<const K: usize>` makes K a
-    /// compile-time constant: Rust compiles a separate, fully specialized copy for each K used.
-    fn evaluate_columns<const K: usize>(
+    /// Evaluate a kernel with K stencil columns, stored as B 4-wide vectors per table row, at
+    /// every point. K and B are compile-time constants: one specialized copy per kernel size.
+    fn evaluate_columns<const K: usize, const B: usize>(
         &self,
-        table: &ColumnTable,
         points: ArrayView1<'_, f64>,
     ) -> PyResult<Vec<f64>> {
-        // The table rows as fixed-size arrays of K coefficients each
-        let (rows, _) = table.rows.as_chunks::<K>();
+        // The padded table rows, as arrays of B vectors each
+        let (rows, _) = self.padded_rows.as_chunks::<B>();
         let mut out: Vec<f64> = Vec::with_capacity(points.len());
         for &x in points.iter() {
             self.check_range(x)?;
             let (start, t) = self.locate(x);
-            // the weights of the K stencil columns at tau = 1 − t
-            let w = horner_weights::<K>(rows, 1.0 - t);
-            // the K coefficients of the stencil, as a fixed-size array: a single bounds check here,
-            // and none in the loop below, since every index is known to be < K
+            // the weights at tau = 1 − t, as B vectors of four
+            let w = horner_weights::<B>(rows, 1.0 - t);
+            // unpacked into 4·B plain numbers, of which the first K are the stencil's weights
+            let lanes: [[f64; 4]; B] = w.map(|v| v.to_array());
+            let weights = lanes.as_flattened();
+            // the K coefficients of the stencil, as a fixed-size array (one bounds check)
             let c: &[f64; K] = self.coefs[start..start + K].try_into().unwrap();
             let mut sum = 0.0_f64;
             for k in 0..K {
-                sum = c[k].mul_add(w[k], sum);
+                sum = c[k].mul_add(weights[k], sum);
             }
             out.push(sum);
         }
@@ -192,14 +197,32 @@ impl Interpolant1D {
     }
 }
 
-/// The weights of all K columns at tau: Horner's scheme over the rows, for all columns at once.
-/// With K known at compile time, the compiler can unroll this and use SIMD instructions.
+/// The rows of a column table as 4-wide vectors, padded with zero columns to a multiple of four
+fn pad_rows(table: &ColumnTable) -> Vec<f64x4> {
+    let k = table.columns;
+    let blocks = (k + 3) / 4;
+    let mut padded = Vec::with_capacity(table.rows.len() / k * blocks);
+    for row in table.rows.chunks_exact(k) {
+        for b in 0..blocks {
+            // four consecutive columns of this row; zero beyond the last column
+            let lanes: [f64; 4] =
+                std::array::from_fn(|l| row.get(4 * b + l).copied().unwrap_or(0.0));
+            padded.push(f64x4::new(lanes));
+        }
+    }
+    padded
+}
+
+/// The weights at tau as B vectors of four: Horner's scheme over the rows, where every step is
+/// one explicit 4-wide fused multiply-add per vector, whatever the kernel size
 #[inline]
-fn horner_weights<const K: usize>(rows: &[[f64; K]], tau: f64) -> [f64; K] {
-    let mut w = [0.0_f64; K];
+fn horner_weights<const B: usize>(rows: &[[f64x4; B]], tau: f64) -> [f64x4; B] {
+    let tau = f64x4::splat(tau);
+    let mut w = [f64x4::splat(0.0); B];
     for row in rows {
-        for k in 0..K {
-            w[k] = w[k].mul_add(tau, row[k]);
+        for b in 0..B {
+            // w ← w·tau + row, four columns at once
+            w[b] = w[b].mul_add(tau, row[b]);
         }
     }
     w

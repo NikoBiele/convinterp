@@ -2,4 +2,4 @@
 # Fine for local development and benchmarks; published wheels will need a portable baseline
 # instead (a decision for later).
 [build]
-rustflags = ["-C", "target-cpu=native"]
+rustflags = ["-C", "target-cpu=native", "-C", "symbol-mangling-version=v0"]
