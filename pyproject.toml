@@ -6,8 +6,25 @@ build-backend = "maturin"
 [project]
 name = "convinterp"
 version = "0.1.0"
+description = "High-order convolution interpolation and derivatives on uniform grids in any dimension, with a Rust core"
+readme = "README.md"                      # shown as the project page on PyPI
+license = "MIT"                           # an SPDX license name; the text is in LICENSE
+authors = [{ name = "Nikolaj Maack Bielefeld" }]
 requires-python = ">=3.9"
 dependencies = ["numpy"]
+keywords = ["interpolation", "convolution", "derivatives", "numerical methods", "scientific computing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Homepage = "https://convinterp.org"
+Repository = "https://github.com/NikoBiele/convinterp"
+"Julia package" = "https://github.com/NikoBiele/ConvolutionInterpolations.jl"
 
 [project.optional-dependencies]
 # juliacall is only needed to test against the Julia package, never by users
