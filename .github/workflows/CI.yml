@@ -12,9 +12,13 @@ on:
       - master
     tags:
       - '*'
+    paths-ignore:
+      - 'docs/**'                    # documentation-only changes don't need new wheels
   pull_request:
+    paths-ignore:
+      - 'docs/**'
   workflow_dispatch:
-
+  
 permissions:
   contents: read
 
