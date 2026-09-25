@@ -1,6 +1,9 @@
 // The Rust core of convinterp.
 
-// NEW: the generated kernel tables (src/kernels.rs) become a module of this crate
+// The generated kernel tables (src/kernels.rs) and the coefficient construction
+// (src/coefficients.rs) become modules of this crate
+mod coefficients;
+mod interpolant;
 mod kernels;
 
 use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1};
@@ -24,8 +27,6 @@ fn evaluate_polynomial<'py>(
     let values: Vec<f64> = x.as_array().iter().map(|&xi| horner(coefs, xi)).collect();
     Ok(values.into_pyarray(py))
 }
-
-// NEW ------------------------------------------------------------------------------------------
 
 /// Weights of all columns of a kernel table at `tau`: Horner's scheme over the rows, for all
 /// columns at once (w ← w·tau + row), exactly as the Julia package evaluates them.
@@ -56,12 +57,35 @@ fn kernel_weights(kernel: &str, order: i32, tau: f64) -> PyResult<Vec<f64>> {
     Ok(column_weights(table, tau))
 }
 
+// NEW ------------------------------------------------------------------------------------------
+
+/// Python-visible (for testing): the data values extended by ghost values beyond each boundary,
+/// for `kernel` and the boundary conditions `bc_left` and `bc_right` ("poly", "linear",
+/// "quadratic" or "detect").
+#[pyfunction]
+fn extended_coefficients<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+    kernel: &str,
+    bc_left: &str,
+    bc_right: &str,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    // Parse the boundary conditions; an unknown name becomes a Python ValueError
+    let left = coefficients::Boundary::parse(bc_left).map_err(|e| PyValueError::new_err(e))?;
+    let right = coefficients::Boundary::parse(bc_right).map_err(|e| PyValueError::new_err(e))?;
+    let c = coefficients::extended_coefficients(values.as_slice()?, kernel, left, right)
+        .map_err(|e| PyValueError::new_err(e))?;
+    Ok(c.into_pyarray(py))
+}
+
 // ----------------------------------------------------------------------------------------------
 
 /// The module definition: what Python sees when it imports convinterp._core.
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_polynomial, m)?)?;
-    m.add_function(wrap_pyfunction!(kernel_weights, m)?)?; // NEW
+    m.add_function(wrap_pyfunction!(kernel_weights, m)?)?;
+    m.add_function(wrap_pyfunction!(extended_coefficients, m)?)?;
+    m.add_class::<interpolant::Interpolant1D>()?;
     Ok(())
 }
