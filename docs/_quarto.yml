@@ -12,14 +12,21 @@ website:
   repo-subdir: docs                  # "edit this page" links point into docs/
   repo-actions: [edit, issue]        # links under each page's table of contents
   search: true
+  favicon: assets/logo.svg           # the icon in the browser tab
   navbar:
-    left:
-      - href: index.qmd
-        text: Home
+    logo: assets/logo.svg            # the kernel, next to the site title
+    logo-alt: "convinterp logo: the b7 convolution kernel"
     right:
       - icon: github
         href: https://github.com/NikoBiele/convinterp
         aria-label: GitHub repository
+  sidebar:
+    style: floating                  # always visible on wide screens, as on gert.net
+    contents:
+      - href: index.qmd
+        text: Home
+      - href: accuracy.qmd
+        text: Accuracy and performance
   page-footer:
     left: "© 2026 Nikolaj Maack Bielefeld · MIT license"
     right: "Built with [Quarto](https://quarto.org)"
@@ -31,7 +38,9 @@ format:
     html-math-method: katex          # fast math rendering, as on gert.net
     code-copy: true                  # a copy button on every code block
     code-overflow: wrap
-
+    grid:
+      body-width: 950px              # a wider content column for figures (Quarto's default is 800px)
+      
 jupyter: python3                     # code cells run in Python, against the convinterp built from this repository
 
 execute:
