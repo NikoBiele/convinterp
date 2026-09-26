@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use convinterp in your work, please cite it as below."
+type: software
+title: "convinterp: high-order convolution interpolation and derivatives on uniform grids"
+authors:
+  - given-names: Nikolaj Maack
+    family-names: Bielefeld
+    orcid: "https://orcid.org/0009-0005-4385-6444"
+abstract: >-
+  convinterp interpolates data on uniform grids in any number of dimensions, and differentiates
+  the interpolant exactly, with piecewise-polynomial convolution kernels of up to 7th-order
+  accuracy, evaluated in a compiled Rust core. It is a port of the Julia package
+  ConvolutionInterpolations.jl by the same author, and is tested against it.
+license: MIT
+version: 0.1.0
+date-released: 2026-09-25
+url: "https://convinterp.org"
+repository-code: "https://github.com/NikoBiele/convinterp"
+keywords:
+  - interpolation
+  - convolution
+  - derivatives
+  - numerical methods
+  - scientific computing
