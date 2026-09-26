@@ -91,7 +91,7 @@ used; there, the realistic alternative is a spline.
 ## Derivative accuracy
 
 @fig-derivatives shows the same study for the first three derivatives, compared with the exact
-derivatives of Runge's function. convinterp evaluates derivatives exactly from the kernels'
+derivatives of Runge's function. convinterp evaluates derivatives analytically from the kernels'
 polynomial pieces; the boundary condition here is `"poly"`.
 
 ```{python}
@@ -166,8 +166,8 @@ derivative, so its third derivative is piecewise constant.
 ## Integral accuracy
 
 @fig-integrals shows the same study for the first three integrals, each anchored at $x = -1$:
-zero there, together with all lower integrals. convinterp evaluates integrals exactly from the
-kernels' polynomial pieces; SciPy's cubic spline and NumPy's Chebyshev series are integrated
+zero there, together with all lower integrals. convinterp evaluates integrals analytically from
+the kernels' polynomial pieces; SciPy's cubic spline and NumPy's Chebyshev series are integrated
 with the same anchoring.
 
 ```{python}
