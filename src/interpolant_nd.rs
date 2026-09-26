@@ -289,6 +289,14 @@ fn uniform_spacing(x: &[f64], axis: usize) -> PyResult<f64> {
     if n < 2 {
         return Err(PyValueError::new_err(format!("axis {axis}: need at least 2 knots")));
     }
+    // every knot must be a finite number: a NaN would slip through the checks below, since
+    // every comparison with NaN is false
+    if x.iter().any(|xk| !xk.is_finite()) {
+        return Err(PyValueError::new_err(format!(
+            "axis {axis}: knots must be finite numbers (no NaN or infinity)"
+        )));
+    }
+
     // grid spacing from the full span
     let h = (x[n - 1] - x[0]) / (n - 1) as f64;
     if !(h > 0.0) {
