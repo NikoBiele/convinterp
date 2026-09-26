@@ -59,8 +59,8 @@ print(f"cos(1.0)·exp(0.5)    = {np.cos(1.0) * np.exp(0.5):.10f}")  # the exact 
 
 ## Features
 
-- **High order.** The b-series kernels converge at 7th order on smooth data, with exact
-  polynomial reproduction up to the boundaries.
+- **High order.** The kernels `"b7"` to `"b13"` converge at 7th order on smooth data, and
+  `"b5"` at 6th, with exact polynomial reproduction up to the boundaries.
 - **Derivatives.** Every derivative order a kernel supports, up to 7 for the widest kernels, is
   evaluated exactly from the kernel's polynomial pieces. Orders can differ per axis.
 - **Any number of dimensions.** The same function covers 1D curves, 2D images and fields, and

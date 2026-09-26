@@ -14,7 +14,7 @@ test points as the number of uniformly spaced samples grows from 10 to 10000.
 
 ```{python}
 #| label: fig-convergence
-#| fig-cap: "Maximum interpolation error for Runge's function. The b-series kernels converge at 7th order down to about 1e-15; \"a4\" matches a cubic spline at 4th order. Chebyshev interpolation, shown for reference, requires its own non-uniform sample points."
+#| fig-cap: "Maximum interpolation error for Runge's function. The kernels \"b7\" to \"b13\" converge at 7th order and \"b5\" at 6th, down to about 1e-15; \"a4\" matches a cubic spline at 4th order. Chebyshev interpolation, shown for reference, requires its own non-uniform sample points."
 #| code-fold: true
 import numpy as np                                     # arrays and Chebyshev evaluation
 import matplotlib.pyplot as plt                        # plotting
@@ -79,9 +79,10 @@ fig = convergence_study()
 plt.show()
 ```
 
-All b-series kernels follow the dashed $\mathcal{O}(h^7)$ line until they reach the limit of
-double-precision arithmetic, about $10^{-15}$, at around 1500 samples. The kernel `"a4"`
-converges at 4th order, like the cubic spline. Chebyshev interpolation converges faster than any
+The kernels `"b7"` to `"b13"` follow the dashed $\mathcal{O}(h^7)$ line until they reach the
+limit of double-precision arithmetic, about $10^{-15}$, at around 1500 samples. `"b5"` converges
+at 6th order, which shows as a slightly higher curve that approaches the others at the floor. The
+kernel `"a4"` converges at 4th order, like the cubic spline. Chebyshev interpolation converges faster than any
 fixed order, but only because it chooses its own sample points, clustered towards the ends of the
 interval. On uniformly sampled data, such as measurements, simulations and images, it cannot be
 used; there, the realistic alternative is a spline.
@@ -94,7 +95,7 @@ polynomial pieces; the boundary condition here is `"poly"`.
 
 ```{python}
 #| label: fig-derivatives
-#| fig-cap: "Maximum error of the first three derivatives of Runge's function. The b-series kernels lose about one order of convergence per derivative (dashed lines), and their rounding floor rises slowly. Chebyshev differentiation converges fastest but amplifies rounding by about n² per derivative order."
+#| fig-cap: "Maximum error of the first three derivatives of Runge's function. The b-series kernels lose one order of convergence per derivative (dashed lines for \"b7\" to \"b13\"), and their rounding floor rises slowly. Chebyshev differentiation converges fastest but amplifies rounding by about n² per derivative order."
 #| code-fold: true
 def runge_derivative(x, k):
     # the exact k-th derivative of Runge's function, for k = 1, 2, 3
@@ -152,8 +153,9 @@ fig = derivative_study()
 plt.show()
 ```
 
-Each derivative costs the b-series kernels about one order of convergence: 6th order for the first
-derivative, 5th for the second and 4th for the third. Their rounding floor rises slowly with the
+Each derivative costs the b-series kernels one order of convergence: for `"b7"` to `"b13"`, 6th
+order for the first derivative, 5th for the second and 4th for the third, and one order less for
+`"b5"`. Their rounding floor rises slowly with the
 number of samples, roughly in proportion to $n^k$ for the $k$-th derivative, which is unavoidable
 when differentiating sampled data. Chebyshev differentiation reaches its best accuracy with fewer
 samples, but its rounding grows about $n^2$ per derivative order: for the third derivative it

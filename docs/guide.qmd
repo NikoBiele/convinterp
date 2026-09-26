@@ -45,11 +45,11 @@ provide, and cost.
 |--------|--------|------------|-------------------|-------------|---------------------------|
 | `"a0"` | 0      | —          | —                 | 1st order   | $2^N$  |
 | `"a1"` | 1      | $C^0$      | —                 | 2nd order   | $2^N$  |
-| `"a3"` | 3      | $C^1$      | 1                 | ~3rd order  | $4^N$  |
-| `"a4"` | 3      | $C^1$      | 1                 | ~4th order  | $6^N$  |
-| `"a5"` | 5      | $C^1$      | 1                 | ~3rd order  | $6^N$  |
-| `"a7"` | 7      | $C^1$      | 1                 | ~3rd order  | $8^N$  |
-| `"b5"` | 5      | $C^3$      | 3                 | 7th order   | $10^N$ |
+| `"a3"` | 3      | $C^1$      | 1                 | 3rd order   | $4^N$  |
+| `"a4"` | 3      | $C^1$      | 1                 | 4th order   | $6^N$  |
+| `"a5"` | 5      | $C^3$      | 1                 | 3rd order   | $6^N$  |
+| `"a7"` | 7      | $C^5$      | 1                 | 3rd order   | $8^N$  |
+| `"b5"` | 5      | $C^3$      | 3                 | 6th order   | $10^N$ |
 | `"b7"` | 7      | $C^5$      | 5                 | 7th order   | $12^N$ |
 | `"b9"` | 9      | $C^7$      | 6                 | 7th order   | $14^N$ |
 | `"b11"`| 11     | $C^9$      | 7                 | 7th order   | $16^N$ |
@@ -57,17 +57,22 @@ provide, and cost.
 
 "Continuity" is how many derivatives of the interpolant are continuous, and "Stencil" is how many
 data values each evaluated point combines. The stencil sets the cost: in 3D, `"b7"` combines
-$12^3 = 1728$ values per point.
+$12^3 = 1728$ values per point. Continuity and convergence order follow exactly from the kernels'
+rational coefficients: a kernel that reproduces polynomials up to degree $m$ converges at order
+$m + 1$.
 
 Some guidance:
 
 - **`"b7"` is the default in 1D and 2D**, and the right choice for most smooth data: 7th-order
   accuracy, five continuous derivatives.
-- **All b-series kernels converge at 7th order.** The wider ones don't interpolate more
+- **`"b7"` to `"b13"` all converge at 7th order.** The wider ones don't interpolate more
   accurately; they are smoother and provide higher derivatives. Choose `"b9"` to `"b13"` when you
   need those.
+- **`"b5"` converges at 6th order** with a smaller stencil, which makes it the default in 3D.
+  On coarse grids it behaves almost like the 7th-order kernels.
 - **`"a4"` is a fast 4th-order kernel**, comparable in accuracy to a cubic spline, and
-  `"a1"` is linear interpolation.
+  `"a1"` is linear interpolation. `"a5"` and `"a7"` are smoother than `"a3"` but converge at the
+  same 3rd order.
 - **`kernel="auto"`** (the default) chooses by the number of dimensions, to keep the stencil
   affordable: `"b7"` for up to 2D, `"b5"` in 3D, `"a4"` in 4D and 5D, and `"a3"` beyond.
 
