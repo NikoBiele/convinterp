@@ -38,22 +38,22 @@ wrong. Extrapolation beyond the data is not supported.
 ## Choosing a kernel
 
 The `kernel` argument selects the interpolation kernel. All kernels are piecewise polynomials that
-pass exactly through the data; they differ in accuracy, smoothness, how many derivatives they
-provide, and cost.
+pass exactly through the data; they differ in accuracy, smoothness, how many derivatives and
+integrals they provide, and cost.
 
-| Kernel | Degree | Continuity | Derivatives up to | Convergence | Stencil in $N$ dimensions |
-|--------|--------|------------|-------------------|-------------|---------------------------|
-| `"a0"` | 0      | —          | —                 | 1st order   | $2^N$  |
-| `"a1"` | 1      | $C^0$      | —                 | 2nd order   | $2^N$  |
-| `"a3"` | 3      | $C^1$      | 1                 | 3rd order   | $4^N$  |
-| `"a4"` | 3      | $C^1$      | 1                 | 4th order   | $6^N$  |
-| `"a5"` | 5      | $C^3$      | 1                 | 3rd order   | $6^N$  |
-| `"a7"` | 7      | $C^5$      | 1                 | 3rd order   | $8^N$  |
-| `"b5"` | 5      | $C^3$      | 3                 | 6th order   | $10^N$ |
-| `"b7"` | 7      | $C^5$      | 5                 | 7th order   | $12^N$ |
-| `"b9"` | 9      | $C^7$      | 6                 | 7th order   | $14^N$ |
-| `"b11"`| 11     | $C^9$      | 7                 | 7th order   | $16^N$ |
-| `"b13"`| 13     | $C^{11}$   | 7                 | 7th order   | $18^N$ |
+| Kernel | Degree | Continuity | Derivatives up to | Integrals up to | Convergence | Stencil in $N$ dimensions |
+|--------|--------|------------|-------------------|-----------------|-------------|---------------------------|
+| `"a0"` | 0      | —          | —                 | 2               | 1st order   | $2^N$  |
+| `"a1"` | 1      | $C^0$      | —                 | 2               | 2nd order   | $2^N$  |
+| `"a3"` | 3      | $C^1$      | 1                 | 4               | 3rd order   | $4^N$  |
+| `"a4"` | 3      | $C^1$      | 1                 | 4               | 4th order   | $6^N$  |
+| `"a5"` | 5      | $C^3$      | 1                 | 4               | 3rd order   | $6^N$  |
+| `"a7"` | 7      | $C^5$      | 1                 | 4               | 3rd order   | $8^N$  |
+| `"b5"` | 5      | $C^3$      | 3                 | 6               | 6th order   | $10^N$ |
+| `"b7"` | 7      | $C^5$      | 5                 | 8               | 7th order   | $12^N$ |
+| `"b9"` | 9      | $C^7$      | 6                 | 8               | 7th order   | $14^N$ |
+| `"b11"`| 11     | $C^9$      | 7                 | 8               | 7th order   | $16^N$ |
+| `"b13"`| 13     | $C^{11}$   | 7                 | 8               | 7th order   | $18^N$ |
 
 "Continuity" is how many derivatives of the interpolant are continuous, and "Stencil" is how many
 data values each evaluated point combines. The stencil sets the cost: in 3D, `"b7"` combines
@@ -93,6 +93,34 @@ print(f"d2(1.0) = {d2(1.0):.10f},  -sin(1.0) = {-np.sin(1.0):.10f}")
 Each kernel supports derivatives up to the order in the table above; asking for more raises a
 `ValueError`. Each derivative order costs about one order of convergence, as the
 [derivative study](accuracy.qmd#derivative-accuracy) shows.
+
+## Integrals
+
+A negative `derivative` order gives an interpolant of an integral: `derivative=-1` is the
+antiderivative, `derivative=-2` the twofold integral, and so on. Integrals are anchored at the
+first knot: there the integral is zero, and so are all lower integrals. So `derivative=-1`
+evaluated at $b$ is $\int_{x_0}^{b}$ of the interpolant. Like derivatives, integrals are computed
+exactly from the kernel's polynomial pieces, not by numerical quadrature:
+
+```{python}
+i1 = convolution_interpolation(x, y, derivative=-1)    # the integral from x[0] = 0
+i2 = convolution_interpolation(x, y, derivative=-2)    # the twofold integral, also anchored at 0
+print(f"i1(1.0) = {i1(1.0):.10f},  1 - cos(1.0) = {1 - np.cos(1.0):.10f}")
+print(f"i2(1.0) = {i2(1.0):.10f},  1 - sin(1.0) = {1 - np.sin(1.0):.10f}")
+```
+
+A definite integral between two limits is the difference of two evaluations:
+
+```{python}
+a, b = 1.0, 2.5                                        # the integration limits
+integral = i1(b) - i1(a)                               # the integral of the interpolant from a to b
+print(f"integral = {integral:.10f},  cos(a) - cos(b) = {np.cos(a) - np.cos(b):.10f}")
+```
+
+Integrals don't cost convergence order: the integral of the interpolant is at least as accurate
+as the interpolant itself. Evaluating one costs about the same as the interpolant, whatever the
+number of knots, because the contribution of all data left of a point is precomputed when the
+interpolant is created. Each kernel supports integrals up to the order in the table above.
 
 ## Boundary conditions
 
@@ -176,21 +204,50 @@ plt.show()
 The other arguments extend in the same way:
 
 - **`derivative`** is one order for every axis, or one per axis: `derivative=(1, 0)` is
-  $\partial/\partial x$, and `derivative=(1, 1)` is $\partial^2/\partial x\,\partial y$.
+  $\partial/\partial x$, and `derivative=(1, 1)` is $\partial^2/\partial x\,\partial y$. Negative
+  orders integrate along their axis, each anchored at that axis's first knot:
+  `derivative=(-1, -1)` is the double integral from $(x_0, y_0)$, and `derivative=(-1, 1)`
+  integrates along x and differentiates along y. Integrals in N-D precompute tables of
+  $\prod_d (1 + m_d) - 1$ times the size of the data, over the integral orders $m_d$; if that
+  would exceed 2 GiB, a `ValueError` says so.
 - **`bc`** is one name for every boundary, one `(left, right)` pair for every axis, or a
   sequence of pairs, one per axis.
 - **`kernel`** is one kernel for all axes.
 
 ```{python}
-dx = convolution_interpolation((xg, yg), field, derivative=(1, 0))   # ∂/∂x
-dxy = convolution_interpolation((xg, yg), field, derivative=(1, 1))  # ∂²/∂x∂y
+dx = convolution_interpolation((xg, yg), field, derivative=(1, 0))    # ∂/∂x
+dxy = convolution_interpolation((xg, yg), field, derivative=(1, 1))   # ∂²/∂x∂y
+ixy = convolution_interpolation((xg, yg), field, derivative=(-1, -1)) # ∫∫ from (xg[0], yg[0])
 bcs = convolution_interpolation((xg, yg), field, bc=[("poly", "poly"), ("detect", "linear")])
-print(dx(0.2, 0.1), dxy(0.2, 0.1), bcs(0.2, 0.1))
+print(dx(0.2, 0.1), dxy(0.2, 0.1), ixy(0.2, 0.1), bcs(0.2, 0.1))
 ```
+
+## Limitations
+
+The high orders assume smooth, well-resolved data. Where that doesn't hold, the kernels behave
+like any high-order interpolation:
+
+- **Features near the grid resolution are damped.** Oscillations faster than about half the
+  Nyquist frequency (fewer than about four knots per period) are attenuated, and close to the
+  Nyquist frequency the high-order kernels are no more accurate than a cubic spline.
+- **Jumps ring, and kinks aren't sharpened.** At a discontinuity the interpolant overshoots by
+  about 11 %, much like a cubic spline, and at a kink the higher orders don't help. Linear
+  interpolation (`"a1"`) doesn't overshoot.
+- **Monotonicity and positivity aren't preserved.** Between the knots, the interpolant of
+  monotone or positive data can overshoot. Where these must hold, use `"a1"`, or a
+  shape-preserving method such as SciPy's `PchipInterpolator`.
+- **Noise isn't removed.** The interpolant passes through every data value, noise included, and
+  derivatives amplify noise however high the order: for noisy measurements, smooth first.
+- **Polynomial boundaries need enough data.** `"poly"` and `"detect"` need at least 4 data values
+  along an axis for `"a3"` to `"a7"`, 6 for `"b5"`, and 8 for `"b7"` to `"b13"`. With fewer, the
+  boundaries fall back to linear extrapolation, and the kernel's full order isn't reached there.
+- **`"detect"` is a heuristic.** It tests how smooth the data are near each boundary. It reliably
+  falls back to linear for noisy or rough boundary data, but a single outlier at the very end
+  can pass as smooth. When you know your data, choose `bc` explicitly.
 
 ## Not available yet
 
-convinterp is in alpha. The Julia package it ports also provides antiderivatives (integrals),
-interpolation of scattered, non-uniform data, and extrapolation beyond the data range. Integrals
-and scattered data are planned next; until then, convinterp covers interpolation and derivatives
-inside the range of data on uniform grids.
+convinterp is in alpha. The Julia package it ports also provides interpolation of scattered,
+non-uniform data, and extrapolation beyond the data range. Scattered data are planned next; until
+then, convinterp covers interpolation, derivatives and integrals inside the range of data on
+uniform grids.
