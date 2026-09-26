@@ -3,6 +3,7 @@
 // The generated kernel tables (src/kernels.rs) and the coefficient construction
 // (src/coefficients.rs) become modules of this crate
 mod coefficients;
+mod integral;
 mod interpolant;
 mod interpolant_nd;
 mod kernels;
