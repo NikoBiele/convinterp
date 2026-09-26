@@ -36,7 +36,8 @@ class Interpolation:
 
 
 def convolution_interpolation(knots, values, kernel="auto", bc="detect", derivative=0):
-    """Interpolate data on a uniform grid in any number of dimensions, or differentiate it.
+    """Interpolate data on a uniform grid in any number of dimensions, or differentiate or
+    integrate it.
 
     Parameters
     ----------
@@ -57,8 +58,14 @@ def convolution_interpolation(knots, values, kernel="auto", bc="detect", derivat
         "quadratic", or "detect" (polynomial where the data allow it, otherwise linear).
     derivative : int or sequence of int, default 0
         Derivative order: one order for every axis, or one per axis. 0 is the interpolant
-        itself, 1 its first derivative, and so on. Available up to order 1 for "a3" to "a7", 3
-        for "b5", 5 for "b7", 6 for "b9" and 7 for "b11" and "b13".
+        itself, 1 its first derivative, and so on. A negative order −m is the m-fold integral
+        along that axis, anchored at the axis's first knot: it is zero there, and so are all
+        lower integrals. Orders can be mixed across axes, e.g. (-1, 1) integrates along the
+        first axis and differentiates along the second. Derivatives are available up to order 1
+        for "a3" to "a7", 3 for "b5", 5 for "b7", 6 for "b9" and 7 for "b11" and "b13";
+        integrals up to order 2 for "a0" and "a1", 4 for "a3" to "a7", 6 for "b5" and 8 for
+        "b7" to "b13". In N-D, integrals precompute tables of (Π_d (1 + m_d) − 1) times the size
+        of the data, over the integral orders m_d; above 2 GiB a ValueError is raised.
 
     Returns
     -------
@@ -77,6 +84,9 @@ def convolution_interpolation(knots, values, kernel="auto", bc="detect", derivat
     >>> d_itp = convolution_interpolation(x, np.sin(x), derivative=1)  # its first derivative
     >>> round(d_itp(1.0), 6)                                           # cos(1)
     0.540302
+    >>> i_itp = convolution_interpolation(x, np.sin(x), derivative=-1) # its integral from x[0] = 0
+    >>> round(i_itp(1.0), 6)                                           # 1 − cos(1)
+    0.459698
     >>> y = np.linspace(0.0, 1.0, 30)                                  # a second axis
     >>> data = np.sin(x)[:, None] * np.exp(y)[None, :]                 # data on the 2D grid
     >>> itp2 = convolution_interpolation((x, y), data)                 # 2D interpolant
@@ -85,6 +95,9 @@ def convolution_interpolation(knots, values, kernel="auto", bc="detect", derivat
     >>> dxy = convolution_interpolation((x, y), data, derivative=(1, 1))  # ∂²/∂x∂y
     >>> round(dxy(1.0, 0.5), 6)                                        # cos(1)·exp(0.5)
     0.890808
+    >>> ixy = convolution_interpolation((x, y), data, derivative=(-1, -1))  # ∫∫ from (0, 0)
+    >>> round(ixy(1.0, 0.5), 6)                                        # (1 − cos(1))·(exp(0.5) − 1)
+    0.298216
     """
     # the data as a float64 array; its number of axes decides 1D or N-D
     values = np.ascontiguousarray(values, dtype=np.float64)
