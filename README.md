@@ -7,6 +7,9 @@ convinterp is a port of the Julia package
 [ConvolutionInterpolations.jl](https://github.com/NikoBiele/ConvolutionInterpolations.jl), by the
 same author, and is tested against it.
 
+**Documentation: [convinterp.org](https://convinterp.org)**, with a user guide and accuracy and
+speed comparisons with SciPy.
+
 **Status: alpha.** Interpolation and derivatives on uniform grids work in any dimension.
 Integrals and scattered data are coming.
 
