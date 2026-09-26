@@ -67,7 +67,7 @@ pub fn extended_coefficients(
         .ok_or_else(|| format!("no polynomial ghost matrix for kernel {kernel:?}"))?;
     // the vector seen as a 1D array view, so the same line routine serves 1D and N-D
     let mut line = ArrayViewMut1::from(&mut c[..]);
-    fill_ghosts(&mut line, n, n_ghost, poly, left, right);
+    fill_ghosts(&mut line, n, n_ghost, poly, left, right)?;
     Ok(c)
 }
 
@@ -107,7 +107,7 @@ pub fn extended_coefficients_nd(
         let n = data_shape[axis];
         // `lanes_mut` visits every line of the array along `axis`, as a mutable 1D view
         for mut line in c.lanes_mut(Axis(axis)) {
-            fill_ghosts(&mut line, n, n_ghost, poly, left, right);
+            fill_ghosts(&mut line, n, n_ghost, poly, left, right)?;
         }
     }
     Ok(c)
@@ -124,7 +124,7 @@ fn fill_ghosts(
     poly: &'static GhostMatrix,
     left: Boundary,
     right: Boundary,
-) {
+) -> Result<(), String> {
     let ns = poly.cols; // data values the polynomial extrapolation uses
     let few_points = n < ns;
     let eqs = n_ghost + 1;
@@ -137,6 +137,12 @@ fn fill_ghosts(
     let mut centered = raw.clone();
     center(&mut centered);
     let g = choose_matrix(poly, left, few_points, &centered, 0, 1);
+    // the matrix reads g.cols values next to the boundary; with fewer data values along this
+    // line (e.g. :quadratic with 2 values) it cannot be applied, as in Julia
+    // (fill_ghost_points_polynomial!)
+    if g.cols > m {
+        return Err(format!("boundary condition needs {} values along the line, got {m}", g.cols));
+    }
     for j in 1..=n_ghost {
         // ghost j lies j positions left of the first data value
         line[n_ghost - j] = ghost_value(g, j, |d| raw[d]);
@@ -147,10 +153,15 @@ fn fill_ghosts(
     let mut centered = raw.clone();
     center(&mut centered);
     let g = choose_matrix(poly, right, few_points, &centered, m - 1, -1);
+    // the same check for the right boundary, whose condition may differ from the left one
+    if g.cols > m {
+        return Err(format!("boundary condition needs {} values along the line, got {m}", g.cols));
+    }
     for j in 1..=n_ghost {
         // ghost j lies j positions right of the last data value; nearest data value first
         line[n_ghost + n - 1 + j] = ghost_value(g, j, |d| raw[m - 1 - d]);
     }
+    Ok(())
 }
 
 /// Subtract the mean from every value (in place), returning the mean
