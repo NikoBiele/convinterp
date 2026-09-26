@@ -68,6 +68,12 @@ The data are extended beyond each boundary by extrapolation: `bc="detect"` (the 
 polynomial extrapolation where the data near the boundary allow it and linear otherwise. You can
 also choose `"poly"`, `"linear"` or `"quadratic"`, separately for each side and each axis.
 
+## Citing
+
+If you use convinterp in your work, please cite it:
+[doi.org/10.5281/zenodo.22972816](https://doi.org/10.5281/zenodo.22972816) (always the latest
+version). A BibTeX entry is on the [About page](https://convinterp.org/about.html).
+
 ## Declaration of AI Assistance
 
 The Rust core and much of the Python code of convinterp were written with substantial assistance

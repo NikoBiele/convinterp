@@ -1,0 +1,59 @@
+---
+title: "About"
+---
+
+## convinterp and ConvolutionInterpolations.jl
+
+convinterp is a Python port of the Julia package
+[ConvolutionInterpolations.jl](https://github.com/NikoBiele/ConvolutionInterpolations.jl), by the
+same author. Both packages implement the same methods: the b-series kernels, the polynomial
+boundary conditions, and the compensated evaluation of ghost values. convinterp's core is written
+in Rust, and its test suite compares it with the Julia package across kernels, boundary
+conditions, derivative orders and dimensions; the boundary coefficients of the two packages agree
+bit for bit.
+
+Features of the Julia package that convinterp does not provide yet, such as integrals and scattered
+data, are listed at the end of the [user guide](guide.qmd#not-available-yet).
+
+## Citing convinterp
+
+If you use convinterp in your work, please cite it. Each release is archived on Zenodo with its
+own DOI; the DOI below always refers to the latest version:
+
+> Bielefeld, N. M. (2026). *convinterp: high-order convolution interpolation and derivatives on
+> uniform grids*. Zenodo. <https://doi.org/10.5281/zenodo.22972816>
+
+```bibtex
+@software{bielefeld_convinterp,
+  author    = {Bielefeld, Nikolaj Maack},
+  title     = {convinterp: high-order convolution interpolation and derivatives on uniform grids},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.22972816},
+  url       = {https://convinterp.org}
+}
+```
+
+To cite one specific version, use its own DOI, listed on the
+[Zenodo record](https://doi.org/10.5281/zenodo.22972816). The GitHub repository also offers
+these details under "Cite this repository".
+
+## Author
+
+Nikolaj Maack Bielefeld ([ORCID 0009-0005-4385-6444](https://orcid.org/0009-0005-4385-6444)).
+Questions, bug reports and suggestions are welcome as
+[issues on GitHub](https://github.com/NikoBiele/convinterp/issues).
+
+## Declaration of AI assistance
+
+The Rust core and much of the Python code of convinterp were written with substantial assistance
+from Claude (Anthropic). The mathematical methods, the kernels and the reference implementation
+come from the author's Julia package ConvolutionInterpolations.jl, and the port is validated
+against it: the test suite compares convinterp with the Julia package across kernels, boundary
+conditions, derivative orders and dimensions, with the boundary coefficients agreeing bit for bit.
+The author has reviewed and is responsible for all code.
+
+## License
+
+convinterp is free software under the
+[MIT license](https://github.com/NikoBiele/convinterp/blob/main/LICENSE).
