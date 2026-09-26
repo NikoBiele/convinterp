@@ -24,13 +24,14 @@ def test_exact_on_reproduced_polynomials():
 
 
 def test_errors():
-    # an order above the kernel's highest, a kernel without derivatives, and negative orders
+    # an order above the kernel's highest, a kernel without derivatives, and an integral order
+    # above the kernel's highest (the integrals themselves are tested in test_integrals.py)
     with pytest.raises(ValueError):
         convolution_interpolation(X, Y, kernel="b5", derivative=4)
     with pytest.raises(ValueError):
         convolution_interpolation(X, Y, kernel="a1", derivative=1)
     with pytest.raises(ValueError):
-        convolution_interpolation(X, Y, derivative=-1)
+        convolution_interpolation(X, Y, kernel="b5", derivative=-7)
 
 
 @pytest.fixture(scope="module")

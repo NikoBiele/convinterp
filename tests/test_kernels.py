@@ -40,3 +40,31 @@ def test_matches_julia(julia_weights):
         for tau in TAUS:
             expected = np.asarray(julia_weights(kernel, 0, float(tau)))
             np.testing.assert_allclose(kernel_weights(kernel, 0, tau), expected, rtol=0, atol=1e-15)
+
+
+# Highest integral order m (derivative order −m) per kernel, as in ConvolutionInterpolations.jl
+MAX_INTEGRAL = {"a1": 2, "a3": 4, "a4": 4, "a5": 4, "a7": 4,
+                "b5": 6, "b7": 8, "b9": 8, "b11": 8, "b13": 8}
+
+
+def test_integral_tables_end_at_max_order():
+    # Every integral order up to the kernel's maximum has a table, and the next one has none
+    for kernel, m_max in MAX_INTEGRAL.items():
+        for m in range(1, m_max + 1):
+            kernel_weights(kernel, -m, 0.5)                  # raises if the table is missing
+        with pytest.raises(ValueError):
+            kernel_weights(kernel, -(m_max + 1), 0.5)
+
+
+def test_integral_weights_match_julia(julia_weights):
+    # Integral orders −m: Julia evaluates Kₘ at t with the columns in reversed order; the Rust
+    # tables hold the same weights at tau = 1 − t in eager order (sign (−1)^m folded in at export)
+    for kernel, m_max in MAX_INTEGRAL.items():
+        for m in range(1, m_max + 1):
+            for t in TAUS:
+                # Julia's weights at t, reversed into eager order
+                expected = np.asarray(julia_weights(kernel, -m, float(t)))[::-1]
+                # the Rust weights at tau = 1 − t
+                got = kernel_weights(kernel, -m, 1.0 - t)
+                np.testing.assert_allclose(got, expected, rtol=0, atol=1e-12,
+                                           err_msg=f"{kernel}, order {-m}, t = {t}")
