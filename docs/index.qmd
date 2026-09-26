@@ -1,11 +1,11 @@
 ---
 title: "convinterp"
-subtitle: "High-order convolution interpolation and derivatives on uniform grids, in any number of dimensions"
+subtitle: "High-order convolution interpolation, derivatives and integrals on uniform grids, in any number of dimensions"
 ---
 
 convinterp interpolates data sampled on uniform grids, in one dimension or many, and differentiates
-the interpolant exactly. Its kernels are piecewise polynomials, evaluated in a compiled Rust core;
-the Python interface works with NumPy arrays.
+and integrates the interpolant exactly. Its kernels are piecewise polynomials, evaluated in a
+compiled Rust core; the Python interface works with NumPy arrays.
 
 convinterp is a port of the Julia package
 [ConvolutionInterpolations.jl](https://github.com/NikoBiele/ConvolutionInterpolations.jl), by the
@@ -14,8 +14,8 @@ same author, and is tested against it.
 ::: {.callout-note}
 ## Alpha release
 
-Interpolation and derivatives on uniform grids work in any number of dimensions. Integrals and
-scattered data are coming, and this documentation grows with the package.
+Interpolation, derivatives and integrals on uniform grids work in any number of dimensions.
+Scattered data are coming, and this documentation grows with the package.
 :::
 
 ## Installation
@@ -42,6 +42,11 @@ print(f"sin(1.0)  = {np.sin(1.0):.12f}")               # the exact value, for co
 d_itp = convolution_interpolation(x, np.sin(x), derivative=1)
 print(f"d_itp(1.0) = {d_itp(1.0):.12f}")               # the interpolated derivative at x = 1
 print(f"cos(1.0)   = {np.cos(1.0):.12f}")              # the exact derivative
+
+# its integral from the first knot x[0] = 0, also evaluated exactly
+i_itp = convolution_interpolation(x, np.sin(x), derivative=-1)
+print(f"i_itp(1.0)   = {i_itp(1.0):.12f}")             # the interpolated integral from 0 to 1
+print(f"1 - cos(1.0) = {1 - np.cos(1.0):.12f}")        # the exact integral
 ```
 
 In more dimensions, give one knot array per axis. The data array's axis `d` runs along `knots[d]`:
@@ -63,6 +68,9 @@ print(f"cos(1.0)·exp(0.5)    = {np.cos(1.0) * np.exp(0.5):.10f}")  # the exact 
   `"b5"` at 6th, with exact polynomial reproduction up to the boundaries.
 - **Derivatives.** Every derivative order a kernel supports, up to 7 for the widest kernels, is
   evaluated exactly from the kernel's polynomial pieces. Orders can differ per axis.
+- **Integrals.** Integrals up to order 8, anchored at the first knot, are evaluated exactly as
+  well, in constant time per point whatever the grid size. They can be mixed with derivatives,
+  one order per axis.
 - **Any number of dimensions.** The same function covers 1D curves, 2D images and fields, and
   higher-dimensional tables.
 - **Fast.** Locating a point on a uniform grid takes one division, and the kernel weights come

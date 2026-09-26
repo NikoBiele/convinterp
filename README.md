@@ -1,7 +1,8 @@
 # convinterp
 
 High-order convolution interpolation on uniform grids in any number of dimensions, with
-derivatives, for Python. The core is written in Rust; the kernels are exact polynomials.
+derivatives and integrals, for Python. The core is written in Rust; the kernels are exact
+polynomials.
 
 convinterp is a port of the Julia package
 [ConvolutionInterpolations.jl](https://github.com/NikoBiele/ConvolutionInterpolations.jl), by the
@@ -10,8 +11,8 @@ same author, and is tested against it.
 **Documentation: [convinterp.org](https://convinterp.org)**, with a user guide and accuracy and
 speed comparisons with SciPy.
 
-**Status: alpha.** Interpolation and derivatives on uniform grids work in any dimension.
-Integrals and scattered data are coming.
+**Status: alpha.** Interpolation, derivatives and integrals on uniform grids work in any
+dimension. Scattered data are coming.
 
 ## Installation
 
@@ -34,6 +35,10 @@ print(itp(1.0))                                         # ≈ sin(1) = 0.841471
 d_itp = convolution_interpolation(x, np.sin(x), derivative=1)
 print(d_itp(1.0))                                       # ≈ cos(1) = 0.540302
 
+# integrals: a negative order, zero at the first knot x[0] = 0
+i_itp = convolution_interpolation(x, np.sin(x), derivative=-1)
+print(i_itp(1.0))                                       # ≈ 1 − cos(1) = 0.459698
+
 # 2D: one knot array per axis, and data whose axis d runs along knots[d]
 y = np.linspace(0.0, 1.0, 30)                           # knots of the second axis
 data = np.sin(x)[:, None] * np.exp(y)[None, :]          # sin(x)·exp(y) on the 50 × 30 grid
@@ -55,12 +60,12 @@ print(itp2(xs, ys).shape)                               # (3, 4)
 `kernel="auto"` (the default) chooses by the number of dimensions: `"b7"` in 1D and 2D, `"b5"` in
 3D, and narrower kernels beyond. You can choose any of:
 
-| kernel | order of accuracy | highest derivative |
-|---|---|---|
-| `"a0"` | nearest neighbour | none |
-| `"a1"` | linear | none |
-| `"a3"`, `"a4"`, `"a5"`, `"a7"` | cubic and higher | 1 |
-| `"b5"`, `"b7"`, `"b9"`, `"b11"`, `"b13"` | high order | 3 to 7 |
+| kernel | order of accuracy | highest derivative | highest integral |
+|---|---|---|---|
+| `"a0"` | nearest neighbour | none | 2 |
+| `"a1"` | linear | none | 2 |
+| `"a3"`, `"a4"`, `"a5"`, `"a7"` | cubic and higher | 1 | 4 |
+| `"b5"`, `"b7"`, `"b9"`, `"b11"`, `"b13"` | high order | 3 to 7 | 6 to 8 |
 
 ## Boundary conditions
 
@@ -81,8 +86,8 @@ from Claude (Anthropic). The mathematical methods, the kernels and the reference
 come from the author's Julia package
 [ConvolutionInterpolations.jl](https://github.com/NikoBiele/ConvolutionInterpolations.jl), and the
 port is validated against it: the test suite compares convinterp with the Julia package across
-kernels, boundary conditions, derivative orders and dimensions, with the boundary coefficients
-agreeing bit for bit. The author has reviewed and is responsible for all code.
+kernels, boundary conditions, derivative and integral orders and dimensions, with the boundary
+coefficients agreeing bit for bit. The author has reviewed and is responsible for all code.
 
 ## License
 

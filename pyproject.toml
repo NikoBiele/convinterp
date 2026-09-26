@@ -5,8 +5,8 @@ build-backend = "maturin"
 
 [project]
 name = "convinterp"
-version = "0.1.0"
-description = "High-order convolution interpolation and derivatives on uniform grids in any dimension, with a Rust core"
+version = "0.2.0"
+description = "High-order convolution interpolation, derivatives and integrals on uniform grids in any dimension, with a Rust core"
 readme = "README.md"                      # shown as the project page on PyPI
 license = "MIT"                           # an SPDX license name; the text is in LICENSE
 authors = [{ name = "Nikolaj Maack Bielefeld" }]

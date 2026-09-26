@@ -163,15 +163,96 @@ samples, but its rounding grows about $n^2$ per derivative order: for the third 
 becomes worse than no interpolation at all. The cubic spline converges at $4 - k$ for the $k$-th
 derivative, so its third derivative is piecewise constant.
 
+## Integral accuracy
+
+@fig-integrals shows the same study for the first three integrals, each anchored at $x = -1$:
+zero there, together with all lower integrals. convinterp evaluates integrals exactly from the
+kernels' polynomial pieces; SciPy's cubic spline and NumPy's Chebyshev series are integrated
+with the same anchoring.
+
+```{python}
+#| label: fig-integrals
+#| fig-cap: "Maximum error of the first three integrals of Runge's function, anchored at x = −1. The b-series kernels converge at their interpolation order (dashed lines: 7th order, the rate of \"b7\" to \"b13\"), down to rounding; unlike for derivatives, their rounding floor stays low."
+#| code-fold: true
+def runge_integral(x, k):
+    # the exact k-th integral of Runge's function from −1, with all lower integrals zero there
+    a5 = np.arctan(5.0)                                              # arctan(5), from the lower limit
+    def G(s):
+        # an antiderivative of arctan(5s)
+        return s * np.arctan(5.0 * s) - np.log(1.0 + 25.0 * s**2) / 10.0
+    def H(s):
+        # an antiderivative of G
+        return ((s**2 / 2.0) * np.arctan(5.0 * s) - s / 10.0 + np.arctan(5.0 * s) / 50.0
+                - (s * np.log(1.0 + 25.0 * s**2) - 2.0 * s + 0.4 * np.arctan(5.0 * s)) / 10.0)
+    if k == 1:
+        return (np.arctan(5.0 * x) + a5) / 5.0
+    if k == 2:
+        return (G(x) - G(-1.0)) / 5.0 + a5 / 5.0 * (x + 1.0)
+    if k == 3:
+        return (H(x) - H(-1.0) - G(-1.0) * (x + 1.0)) / 5.0 + a5 / 5.0 * (x + 1.0)**2 / 2.0
+    raise ValueError("k must be 1, 2 or 3")
+
+
+def integral_study(orders=(1, 2, 3)):
+    x_test = np.linspace(-1.0, 1.0, 11_001)                          # dense test points
+    ns = np.unique(np.logspace(1, 4, 100).astype(int))               # 10 … 10000 samples, log-spaced
+    kernels = ["b5", "b7", "b9", "b11", "b13"]                       # the high-order kernels
+
+    fig, axes = plt.subplots(len(orders), 1, figsize=(10, 6 * len(orders)))  # panels stacked vertically
+    for ax, k in zip(axes, orders):
+        exact = runge_integral(x_test, k)                            # the exact k-th integral
+        errors = {kern: [] for kern in kernels}                      # max error per kernel, per n
+        spline_errors, cheb_errors = [], []                          # the two references
+
+        for n in ns:
+            x = np.linspace(-1.0, 1.0, n)                            # uniform grid with n samples
+            y = runge(x)                                             # the data on it
+            for kern in kernels:
+                i_itp = convolution_interpolation(x, y, kernel=kern, bc="poly", derivative=-k)
+                errors[kern].append(np.max(np.abs(i_itp(x_test) - exact)))
+            spline = CubicSpline(x, y).antiderivative(k)             # k-th integral, zero at x = −1
+            spline_errors.append(np.max(np.abs(spline(x_test) - exact)))
+            coefs = np.polynomial.chebyshev.chebint(chebyshev_coefficients(runge, n), m=k, lbnd=-1.0)
+            cheb_errors.append(np.max(np.abs(np.polynomial.chebyshev.chebval(x_test, coefs) - exact)))
+
+        ax.loglog(ns, spline_errors, lw=2.5, color="orange", label="Cubic spline (SciPy)")
+        for kern in kernels:
+            ax.loglog(ns, errors[kern], lw=2, label=f'"{kern}"')     # one line per convinterp kernel
+        ax.loglog(ns, cheb_errors, lw=2.5, color="blue", label="Chebyshev")
+        i100 = np.argmin(np.abs(ns - 100))                           # anchor the slope line near n = 100
+        anchor = 10.0 * errors["b7"][i100]                           # a decade above the b7 curve there
+        ax.loglog(ns, anchor * (ns[i100] / ns) ** 7, "k--", lw=2,
+                  label=r"$\mathcal{O}(h^{7})$")                     # the rate of "b7" to "b13"
+        ax.set_xlim(10, 1e4)
+        largest = max(max(spline_errors), max(cheb_errors), *(max(e) for e in errors.values()))
+        ax.set_ylim(1e-17, 10.0 * largest)                           # from below the rounding floor to a decade above the largest error
+        ax.set_title(rf"integral order {k}")
+        ax.set_xlabel("Number of sample points")
+        ax.set_ylabel("Maximum absolute error")                      # every panel has its own scale
+        ax.grid(True, which="both", alpha=0.3)                       # light grid for reading slopes
+        ax.legend(loc="lower left")
+    fig.tight_layout()
+    return fig
+
+
+fig = integral_study()
+plt.show()
+```
+
+The integrals converge at the order of the interpolant: 7th for `"b7"` to `"b13"` (dashed lines)
+and 6th for `"b5"`, since the error of an integral is the integral of the interpolation error.
+Integration doesn't amplify rounding: unlike for derivatives, the error floor doesn't rise with
+the number of samples.
+
 ## Evaluation speed
 
 @fig-timing compares the time per evaluated point with SciPy's standard interpolators, in 1D and
-2D. Every interpolant is built before the timing starts, and all points are evaluated in one
-vectorized call, taking the fastest of five runs.
+2D, and for integrals in 1D. Every interpolant is built before the timing starts, and all points
+are evaluated in one vectorized call, taking the fastest of five runs.
 
 ```{python}
 #| label: fig-timing
-#| fig-cap: "Evaluation time per point, convinterp (blue) and SciPy (orange). Measured on the machine that built this page, at build time: absolute times vary between machines, but the ratios between methods are what matters."
+#| fig-cap: "Evaluation time per point, convinterp (blue) and SciPy (orange). Top: interpolation in 1D; middle: in 2D; bottom: first integrals in 1D, against the antiderivatives of SciPy's splines. Measured on the machine that built this page, at build time: absolute times vary between machines, but the ratios between methods are what matters."
 #| code-fold: true
 import time                                            # wall-clock timing
 from scipy.interpolate import make_interp_spline, RegularGridInterpolator, RectBivariateSpline
@@ -229,6 +310,24 @@ def timing_2d(n_knots=200, n_points=200_000):
     return convinterp, scipy
 
 
+def timing_1d_integrals(n_knots=1000, n_points=1_000_000):
+    # evaluation time per point of first integrals in 1D, at random (unsorted) points
+    rng = np.random.default_rng(2)                                   # reproducible points
+    x = np.linspace(0.0, 1.0, n_knots)                               # uniform grid
+    y = np.sin(8.0 * x) + 0.3 * x                                    # smooth data on it
+    p = rng.uniform(0.0, 1.0, n_points)                              # the evaluation points
+    convinterp, scipy = {}, {}                                       # ns per point, by method
+    for k in ["a1", "a3", "a4", "b5", "b7", "b9", "b11", "b13"]:
+        itp = convolution_interpolation(x, y, kernel=k, derivative=-1)  # the integral from x[0]
+        convinterp[f'"{k}"'] = ns_per_point(lambda: itp(p), n_points)
+    spline = CubicSpline(x, y).antiderivative(1)                     # the spline's integral from x[0]
+    scipy["CubicSpline, antiderivative"] = ns_per_point(lambda: spline(p), n_points)
+    for degree in (5, 7):
+        bspline = make_interp_spline(x, y, k=degree).antiderivative(1)  # the B-spline's integral
+        scipy[f"B-spline, degree {degree}, antiderivative"] = ns_per_point(lambda: bspline(p), n_points)
+    return convinterp, scipy
+
+
 def bar_panel(ax, convinterp, scipy, title):
     # horizontal bars: convinterp kernels on top, SciPy methods below, with the times written out
     labels = [f"convinterp {k}" for k in convinterp] + list(scipy)   # one bar per method
@@ -248,9 +347,11 @@ def bar_panel(ax, convinterp, scipy, title):
 def timing_figure():
     c1, s1 = timing_1d()                                             # 1D timings
     c2, s2 = timing_2d()                                             # 2D timings
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))           # 1D above 2D
+    c3, s3 = timing_1d_integrals()                                   # 1D integral timings
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 18))      # 1D, 2D, integrals, stacked
     bar_panel(ax1, c1, s1, "1D: 1000 knots, 10⁶ random points")
     bar_panel(ax2, c2, s2, "2D: 200 × 200 knots, 2·10⁵ random points")
+    bar_panel(ax3, c3, s3, "1D integrals: 1000 knots, 10⁶ random points")
     fig.tight_layout()
     return fig
 
@@ -265,3 +366,8 @@ stencil at once in compiled, vectorized Rust. As a result, even the widest kerne
 evaluates faster than SciPy's linear interpolation, and at comparable orders of accuracy the
 difference is several times: `"a4"` against the cubic spline, and the b-series kernels against the
 degree-5 and degree-7 splines.
+
+Integrals cost about as much as the interpolant itself: the contribution of everything left of a
+point is precomputed when the interpolant is built, so each evaluation is one stencil sum plus a
+short polynomial, whatever the number of knots. SciPy's antiderivatives are splines of one degree
+higher, evaluated like the originals, with the same search for each point.

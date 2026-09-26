@@ -6,7 +6,7 @@ project:
 
 website:
   title: "convinterp"
-  description: "High-order convolution interpolation and derivatives on uniform grids, with a Rust core"
+  description: "High-order convolution interpolation, derivatives and integrals on uniform grids, with a Rust core"
   site-url: https://convinterp.org
   repo-url: https://github.com/NikoBiele/convinterp
   repo-subdir: docs                  # "edit this page" links point into docs/

@@ -212,6 +212,45 @@ In more dimensions, the axes are extended one after the other, and the corner va
 extrapolated again from ghost values; the compensated sums keep them as accurate as this
 construction allows.
 
+## Integrals
+
+Because the interpolant is a finite sum of shifted kernels, it can be integrated term by term.
+Write $x = x_0 + uh$, with $x_0$ the first knot and $x_j = x_0 + jh$ (negative $j$ for the ghost
+values). The integral from the first knot is
+$$
+\int_{x_0}^{x} \hat f(\xi)\, d\xi = h \sum_j c_j \bigl[K_1(u - j) - K_1(-j)\bigr],
+\qquad K_1(s) = \int_0^s k(\sigma)\, d\sigma .
+$$ {#eq-integral}
+
+$K_1$ is a piecewise polynomial of one degree higher than $k$, derived exactly from the kernel's
+pieces. Reproducing constants, condition 4 with $m = 0$, implies $\int k = 1$, so outside the
+support $K_1$ is constant: $K_1(s) = \pm\tfrac12$ for $\pm s \ge M$. The coefficients in
+@eq-integral therefore fall into three groups:
+
+- **Right of the stencil** ($j \ge u + M$): the bracket is $-\tfrac12 - (-\tfrac12) = 0$. These
+  coefficients don't contribute.
+- **In the stencil**: the bracket is a polynomial in the position $t$ within the cell, as for
+  interpolation.
+- **Left of the stencil** ($j \le u - M$): the bracket no longer depends on $t$; it is $1$ for
+  coefficients far from the first knot, and an exact constant for the few near it.
+
+The left group depends only on the cell the point lies in, so its sum is computed once for every
+cell, as a running sum over the coefficients, when the interpolant is created. Each evaluation then
+costs about as much as the interpolant itself, however many knots lie to the left.
+
+Integrals of higher order $m$, all anchored at the first knot, follow in the same way. The kernel
+is replaced by its $m$-fold antiderivative $K_m$, minus the Taylor polynomial of degree $m - 1$
+that makes the integral and all lower integrals vanish at $x_0$. Well left of the stencil, the
+weight of a coefficient becomes $(u - j)^{m-1}/(m-1)!$, which is Cauchy's formula for repeated
+integration; it is a polynomial in $t$ of degree $m - 1$. The left group is then a polynomial in
+$t$ whose $m$ coefficients are precomputed for every cell, again by running sums.
+
+Integration does not cost accuracy: the error of the integral is the integral of the interpolation
+error, so it converges at least at the interpolant's order. In more dimensions the kernel weights
+of the axes multiply, and with integrals along $n$ axes the sum splits into $2^n$ parts, according
+to which integral axes have their coefficients left of the stencil. Each part is precomputed in the
+same way; together they take $\prod_d (1 + m_d) - 1$ times the memory of the data.
+
 ## References
 
 ::: {#refs}
