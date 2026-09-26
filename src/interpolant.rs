@@ -63,9 +63,7 @@ impl Interpolant1D {
         }
         for (k, &xk) in x.iter().enumerate() {
             if (xk - (x[0] + k as f64 * h)).abs() > 1e-8 * h {
-                return Err(PyValueError::new_err(
-                    "knots must be uniformly spaced (nonuniform data: use fit_scattered)",
-                ));
+                return Err(PyValueError::new_err("knots must be uniformly spaced"));
             }
         }
 

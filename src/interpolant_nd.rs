@@ -297,7 +297,7 @@ fn uniform_spacing(x: &[f64], axis: usize) -> PyResult<f64> {
     for (k, &xk) in x.iter().enumerate() {
         if (xk - (x[0] + k as f64 * h)).abs() > 1e-8 * h {
             return Err(PyValueError::new_err(format!(
-                "axis {axis}: knots must be uniformly spaced (nonuniform data: use fit_scattered)"
+                "axis {axis}: knots must be uniformly spaced"
             )));
         }
     }

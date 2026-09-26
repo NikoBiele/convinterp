@@ -25,6 +25,8 @@ website:
     contents:
       - href: index.qmd
         text: Home
+      - href: guide.qmd
+        text: User guide
       - href: accuracy.qmd
         text: Accuracy and performance
   page-footer:
