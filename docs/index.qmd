@@ -11,6 +11,16 @@ convinterp is a port of the Julia package
 [ConvolutionInterpolations.jl](https://github.com/NikoBiele/ConvolutionInterpolations.jl), by the
 same author, and is tested against it.
 
+This documentation has four more pages:
+
+- **[User guide](guide.qmd):** every argument, with examples of kernels, derivatives, integrals,
+  boundary conditions and data in more dimensions, and the method's limitations.
+- **[Accuracy and performance](accuracy.qmd):** convergence and evaluation speed, compared with
+  SciPy and NumPy.
+- **[Theory](theory.qmd):** how convolution interpolation works, with every kernel derived from its
+  defining conditions.
+- **[About](about.qmd):** the relation to the Julia package, and how to cite convinterp.
+
 ::: {.callout-note}
 ## Alpha release
 
