@@ -27,8 +27,10 @@ Repository = "https://github.com/NikoBiele/convinterp"
 "Julia package" = "https://github.com/NikoBiele/ConvolutionInterpolations.jl"
 
 [project.optional-dependencies]
+# SymPy is only needed to derive kernels (convinterp.derivation.derive_kernel)
+derivation = ["sympy"]
 # juliacall is only needed to test against the Julia package, never by users
-test = ["pytest", "juliacall"]
+test = ["pytest", "juliacall", "sympy"]
 
 [tool.maturin]
 python-source = "python"                  # the Python code lives in python/

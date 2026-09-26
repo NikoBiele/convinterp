@@ -1,0 +1,218 @@
+---
+title: "Theory"
+bibliography: references.bib
+---
+
+This page explains how convolution interpolation works, where its accuracy comes from, and how
+convinterp's kernels are defined. Every kernel is derived from its defining conditions in the code
+cells below, in exact rational arithmetic, whenever this documentation is built, and compared with
+the kernels convinterp evaluates.
+
+## Convolution interpolation
+
+Given samples $f_j = f(x_j)$ at uniformly spaced knots $x_j = x_0 + jh$, a convolution interpolant
+is a sum of shifted copies of one kernel function $k$, weighted by coefficients $c_j$:
+
+$$
+\hat f(x) = \sum_j c_j \, k\!\left(\frac{x - x_j}{h}\right).
+$$ {#eq-interpolant}
+
+Inside the data, the coefficients are the samples themselves, $c_j = f_j$. Near the ends, the sum
+also needs coefficients beyond the last knot; these are extrapolated from the data (see
+[Boundaries](#boundaries)). With $x = x_0 + (i + t)h$, $0 \le t < 1$, only the knots within the
+kernel's support contribute, so each evaluation is a short, fixed-length sum.
+
+The kernels are piecewise polynomials: on each unit interval $[i, i + 1]$, $i = 0, \dots, M - 1$,
+$k$ is a polynomial $P_i$ of degree $p$, it is even, $k(-s) = k(s)$, and it vanishes for $|s| \ge M$.
+Each evaluation therefore combines $2M$ coefficients per axis, the kernel's stencil.
+
+## Conditions on a kernel
+
+Following @keys1981, a kernel is defined by conditions on its polynomial pieces; @meijering1999
+studied kernels of this kind systematically for higher polynomial degrees.
+
+1. **Interpolation.** $k(0) = 1$ and $k(i) = 0$ at every other integer, so that
+   $\hat f(x_j) = f_j$: the interpolant passes through the data.
+2. **Symmetry.** $k$ is even, so its odd derivatives vanish at $s = 0$.
+3. **Continuity.** The derivatives of order $1, \dots, d$ are continuous at every knot, and vanish
+   at the end of the support, $s = M$. The interpolant is then $C^d$.
+4. **Polynomial reproduction.** For $m = 0, \dots, R$ and all $t$,
+   $$
+   \sum_j k(t - j)\, j^m = t^m.
+   $$ {#eq-reproduction}
+
+The last condition determines the accuracy. If it holds up to degree $R$, interpolating samples of
+any polynomial of degree $\le R$ returns that polynomial exactly. For a smooth function, expanding
+each sample $f(x_j)$ in a Taylor series around $x$ shows that all terms up to order $R$ are
+reproduced exactly, and the first term that is not has size $h^{R+1}$:
+
+$$
+\hat f(x) - f(x) = \mathcal{O}\!\left(h^{R+1}\right).
+$$ {#eq-order}
+
+A kernel that reproduces polynomials up to degree $R$ therefore converges at order $R + 1$. All
+four conditions are linear in the unknown polynomial coefficients, so a kernel is the solution of
+a linear system. Condition 4 is imposed as an identity in $t$: on $0 \le t < 1$, both sides of
+@eq-reproduction are polynomials in $t$, and every coefficient must match.
+
+## Deriving a kernel
+
+The module `convinterp.derivation` sets up this system and solves it exactly with SymPy
+(`pip install convinterp[derivation]`). With two pieces of degree 3, continuity $C^1$ and
+reproduction up to degree 2, the solution is unique: it is Keys' cubic convolution kernel.
+
+```{python}
+from convinterp.derivation import derive_kernel                     # the exact derivation
+
+keys = derive_kernel(pieces=2, degree=3, continuity=1, reproduce=2)   # Keys (1981)
+for i, piece in enumerate(keys):                                      # one polynomial per unit interval
+    terms = [f"({c}) s^{j}" for j, c in enumerate(piece) if c != 0]   # nonzero terms, lowest power first
+    print(f"on [{i}, {i + 1}]:  " + " + ".join(terms))
+```
+
+That is $k(s) = 1 - \tfrac{5}{2}s^2 + \tfrac{3}{2}s^3$ on $[0, 1]$ and
+$2 - 4s + \tfrac{5}{2}s^2 - \tfrac{1}{2}s^3$ on $[1, 2]$, the kernel convinterp calls `"a3"`. It
+reproduces quadratics, so it converges at 3rd order. With a third piece, the same conditions reach
+reproduction of cubics: Keys' 4th-order kernel, `"a4"`.
+
+## The b-series kernels
+
+The b-series extends this construction to higher degrees and more pieces. For odd degree
+$p \ge 5$, the conditions
+
+$$
+M = \frac{p + 5}{2}\ \text{pieces}, \qquad \text{continuity } C^{p-2}, \qquad
+\text{reproduction up to degree } R = \min(p, 6)
+$$ {#eq-bseries}
+
+have exactly one solution, for every odd degree from 5 to 15 (verified exactly). The kernels
+`"b5"` to `"b13"` are these solutions. They were first found
+by a long exploratory search with symbolic computation, which combined the conditions above with
+additional fixed coefficients and a frequency-response criterion; the search script is kept in the
+Julia package ConvolutionInterpolations.jl. The direct formulation shows that no search is needed:
+the conditions alone determine each kernel, and it can be derived in seconds.
+
+The cell below derives all of convinterp's kernels, checks their continuity and polynomial
+reproduction exactly with `kernel_properties`, and compares each one with the kernel convinterp
+evaluates. For that comparison, it interpolates a unit impulse: data that are 1 at one knot and 0
+at all others. By @eq-interpolant, the interpolant of an impulse is the kernel itself.
+
+```{python}
+#| output: asis
+import time                                                          # to time each derivation
+import numpy as np                                                   # arrays
+from convinterp import convolution_interpolation                     # the compiled kernels
+from convinterp.derivation import KERNEL_SETTINGS, kernel_properties, kernel_function
+
+knots = np.arange(-15.0, 16.0)                                       # integers, wide enough for every kernel
+impulse = (knots == 0.0).astype(float)                               # 1 at the centre, 0 elsewhere
+
+print("| Kernel | Pieces $M$ | Degree $p$ | Continuity | Reproduces up to | Order | "
+      "Derivation time | Max. difference from compiled kernel |")
+print("|---|---|---|---|---|---|---|---|")
+derived = {}
+for name, settings in KERNEL_SETTINGS.items():
+    start = time.perf_counter()
+    kernel = derive_kernel(*settings)                                # the unique solution
+    seconds = time.perf_counter() - start
+    derived[name] = kernel
+    props = kernel_properties(kernel)                                # checked exactly, not assumed
+    s = np.linspace(-props["pieces"] - 0.5, props["pieces"] + 0.5, 4001)
+    compiled = convolution_interpolation(knots, impulse, kernel=name, bc="poly")
+    difference = np.max(np.abs(compiled(s) - kernel_function(kernel)(s)))
+    print(f'| `"{name}"` | {props["pieces"]} | {props["degree"]} | $C^{{{props["continuity"]}}}$ | '
+          f'{props["reproduces"]} | {props["reproduces"] + 1} | {seconds:.1f} s | {difference:.1e} |')
+```
+
+The differences are at the level of rounding: the compiled kernels are the derived ones. The
+reproduction degree also explains the orders of accuracy. `"b5"`, with degree 5, can reproduce
+polynomials only up to degree 5 and converges at 6th order; from `"b7"` on, the kernels reach the
+design target of degree 6 and converge at 7th order. Higher degrees then add smoothness, not
+accuracy.
+
+@fig-kernels shows the kernels. All have the same basic shape, a central peak with small negative
+side lobes, like a truncated sinc function, and the wider kernels decay more gradually.
+
+```{python}
+#| label: fig-kernels
+#| fig-cap: "Kernels derived from their defining conditions. Each is 1 at s = 0 and 0 at every other integer."
+import matplotlib.pyplot as plt                                      # plotting
+
+s = np.linspace(-9.0, 9.0, 3601)                                     # the widest support, b13
+fig, ax = plt.subplots(figsize=(9, 4.5))
+for name in ["a3", "a4", "b5", "b7", "b13"]:
+    ax.plot(s, kernel_function(derived[name])(s), lw=2, label=f'"{name}"')
+ax.axhline(0.0, color="gray", lw=0.8)                                # the zero line
+ax.set_xlabel("s")
+ax.set_ylabel("k(s)")
+ax.legend()
+plt.show()
+```
+
+@fig-frequency shows what the side lobes achieve. The Fourier transform of a kernel describes how
+the interpolant treats each frequency in the data. The ideal, the sinc function, passes every
+frequency below half the sampling rate unchanged and removes every frequency above it. All kernels
+pass the low frequencies almost unchanged; they differ in how well they suppress the high ones.
+Beyond one cycle per sample, Keys' cubic lets through up to about $10^{-2}$ of the signal, `"b7"`
+about $2 \cdot 10^{-4}$, and `"b13"` less than $10^{-5}$.
+
+```{python}
+#| label: fig-frequency
+#| fig-cap: "Frequency response |K(f)| of the kernels, with f in cycles per sample. The ideal interpolator passes everything below f = 0.5 and nothing above."
+def frequency_response(kernel, samples_per_unit=64, length=64):
+    # |K(f)| by a fast Fourier transform of the kernel sampled finely over a long interval
+    s = np.arange(-length, length, 1.0 / samples_per_unit)           # fine samples, far beyond the support
+    values = kernel_function(kernel)(s)
+    spectrum = np.abs(np.fft.rfft(values)) / samples_per_unit        # approximates the continuous transform
+    f = np.fft.rfftfreq(len(s), d=1.0 / samples_per_unit)            # frequencies in cycles per unit of s
+    return f, spectrum
+
+fig, ax = plt.subplots(figsize=(9, 4.5))
+for name in ["a3", "a4", "b5", "b7", "b13"]:
+    f, response = frequency_response(derived[name])
+    ax.plot(f, response, lw=2, label=f'"{name}"')
+ax.plot([0.0, 0.5, 0.5, 2.0], [1.0, 1.0, 0.0, 0.0], "k--", lw=1.5, label="ideal")
+ax.set_xlim(0.0, 2.0)
+ax.set_ylim(1e-6, 2.0)
+ax.set_yscale("log")
+ax.set_xlabel("frequency f [cycles per sample]")
+ax.set_ylabel("|K(f)|")
+ax.legend(loc="lower left")
+plt.show()
+```
+
+## Boundaries
+
+Near the ends of the data, @eq-interpolant needs coefficients $c_j$ at up to $M - 1$ positions
+beyond the last knot. convinterp extrapolates them from the data, as ConvolutionInterpolations.jl
+does, and the boundary condition chooses how.
+
+With `bc="poly"`, the ghost values are polynomial extrapolation: at the left end, the value $j$
+steps beyond the first knot is
+$$
+c_{-j} = \sum_{i=0}^{n-1} L_i(-j)\, f_i,
+$$
+where $L_i$ are the Lagrange basis polynomials of the $n$ knots nearest the boundary ($n = 4$ for
+the a-series, 6 for `"b5"` and 8 from `"b7"` on). This extrapolation is exact for polynomials of
+degree up to $n - 1$, which is at least the kernel's reproduction degree $R$. The interpolant
+therefore still reproduces polynomials of degree $R$ right up to the boundary, and keeps its order
+of accuracy there. The weights $L_i(-j)$ are integers, so they are exact in any floating-point
+precision.
+
+Extrapolation of high degree amplifies whatever is in the data near the boundary. With
+`bc="detect"`, the default, convinterp first checks whether the data there are smooth enough: it
+compares the $n$-th differences of the values near the boundary with their range, and falls back to
+linear extrapolation where the differences are too large. The [user guide](guide.qmd#boundary-conditions)
+shows an example.
+
+The extrapolation sums have large alternating weights: for the farthest ghost value of `"b13"`,
+their magnitudes add up to about $10^6$. convinterp therefore computes them with a compensated dot
+product [@ogita2005], as accurate as if computed in twice the working precision and then rounded.
+In more dimensions, the axes are extended one after the other, and the corner values are
+extrapolated again from ghost values; the compensated sums keep them as accurate as this
+construction allows.
+
+## References
+
+::: {#refs}
+:::

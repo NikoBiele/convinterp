@@ -29,6 +29,8 @@ website:
         text: User guide
       - href: accuracy.qmd
         text: Accuracy and performance
+      - href: theory.qmd
+        text: Theory
   page-footer:
     left: "© 2026 Nikolaj Maack Bielefeld · MIT license"
     right: "Built with [Quarto](https://quarto.org)"

@@ -80,7 +80,8 @@ plt.show()
 ```
 
 The kernels `"b7"` to `"b13"` follow the dashed $\mathcal{O}(h^7)$ line until they reach the
-limit of double-precision arithmetic, about $10^{-15}$, at around 1500 samples. `"b5"` converges
+limit of double-precision arithmetic: $10^{-14}$ at about 900–1300 samples, and the rounding floor
+of about $10^{-15}$ by about 1100–1900, the wider kernels first. `"b5"` converges
 at 6th order, which shows as a slightly higher curve that approaches the others at the floor. The
 kernel `"a4"` converges at 4th order, like the cubic spline. Chebyshev interpolation converges faster than any
 fixed order, but only because it chooses its own sample points, clustered towards the ends of the
