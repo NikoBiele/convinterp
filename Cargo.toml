@@ -1,7 +1,7 @@
 # The Rust package. Cargo is Rust's build tool and package manager, like Julia's Pkg.
 [package]
 name = "convinterp"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"                  # the Rust language edition (a stable set of language rules)
 description = "Rust core of convinterp: high-order convolution interpolation on uniform grids"
 license = "MIT"
