@@ -56,6 +56,14 @@ impl Interpolant1D {
             ));
         }
 
+        // Every knot must be a finite number: a NaN would slip through the checks below, since
+        // every comparison with NaN is false
+        if x.iter().any(|xk| !xk.is_finite()) {
+            return Err(PyValueError::new_err(
+                "knots must be finite numbers (no NaN or infinity)",
+            ));
+        }
+
         // Grid spacing from the full span, and a check that the knots are uniform
         let h = (x[n - 1] - x[0]) / (n - 1) as f64;
         if !(h > 0.0) {
