@@ -81,7 +81,7 @@ See [Accuracy and performance](accuracy.qmd) for how the kernels compare in prac
 ## Derivatives
 
 The `derivative` argument gives an interpolant of a derivative instead of the data. It is computed
-exactly from the kernel's polynomial pieces, not by finite differences:
+analytically from the kernel's polynomial pieces, not by finite differences:
 
 ```{python}
 d1 = convolution_interpolation(x, y, derivative=1)     # the first derivative of the interpolant
@@ -100,7 +100,7 @@ A negative `derivative` order gives an interpolant of an integral: `derivative=-
 antiderivative, `derivative=-2` the twofold integral, and so on. Integrals are anchored at the
 first knot: there the integral is zero, and so are all lower integrals. So `derivative=-1`
 evaluated at $b$ is $\int_{x_0}^{b}$ of the interpolant. Like derivatives, integrals are computed
-exactly from the kernel's polynomial pieces, not by numerical quadrature:
+analytically from the kernel's polynomial pieces, not by numerical quadrature:
 
 ```{python}
 i1 = convolution_interpolation(x, y, derivative=-1)    # the integral from x[0] = 0
